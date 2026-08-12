@@ -1,0 +1,512 @@
+# 开发计划
+
+本文档将 `roadmap.md` 的里程碑拆解为可执行的任务序列，标注依赖、产出与验证方式。时间估算不是承诺；每个任务先满足退出条件再进入下一任务。
+
+## 执行原则
+
+- 每个里程碑开始前先阅读 `architecture.md` 的对应部分，确认边界不变。
+- 所有安全相关任务必须同时编写负向测试（越权、撤销、重放、日志泄露、缓存泄露、并发冲突）。
+- 数据面边界不可突破：Dashboard 服务端不连接 Relay/daemon，不接收 agent 数据。
+- 阶段划分按依赖顺序，不提前做未开放决策（见 `open-decisions.md`）。
+
+## P0：项目骨架与 M0 验证
+
+> 对应 `roadmap.md` M0。目标：证明“配置一次，第二浏览器直接经 Relay/E2EE 连接 daemon”，并确定技术选型。
+
+### P0.1 技术选型（先做，阻塞后续）
+
+**任务**
+
+1. 决定后端语言/框架：需支持结构化日志 redaction、成熟 session/CSRF、AEAD/KMS 集成。
+2. 决定数据库：单机 M1 用 SQLite，多用户/并发 revision 用 PostgreSQL；schema 必须可迁移。
+3. 决定 Web 框架：独立选择，不引入 Expo Router / React Native store / Paseo App 页面。
+4. 决定 Web session 形态：Web 用 opaque HttpOnly Cookie，Harmony 用 bearer + rotating refresh token。
+
+**产出**
+
+- 更新 `open-decisions.md`，将已定决策移到 `architecture.md`。
+
+**验证**
+
+- 三个应用（web/server/contracts）均可独立构建。
+- server 不依赖 daemon client 相关包。
+
+### P0.2 初始化项目结构
+
+**任务**
+
+1. 初始化 `packages/contracts`：定义 API 请求/响应类型、错误 code、Host sync 格式。
+2. 初始化 `server`：最小 HTTP 服务、配置加载、日志 redaction 框架接入。
+3. 初始化 `web`：路由、状态管理、设计系统基础骨架。
+4. 初始化 `tests/contract` 与 `tests/e2e` 的测试框架。
+
+**产出**
+
+- API contract 类型定义（`packages/contracts`）。
+- 三个应用的构建脚本。
+
+**验证**
+
+- `tests/contract` 能对最小 fixture 断言。
+
+### P0.3 最小认证与 Host 存储
+
+**任务**
+
+1. 实现注册、登录、获得 session 的最简路径（可通过临时持久层）。
+2. 实现 Host 导入 API 的最简路径：结构校验 + envelope encryption 存储。
+3. 实现 Host sync API 的最简路径：按账号 revision 返回 Host 列表。
+
+**产出**
+
+- 可运行的本地 Dashboard API（临时持久层）。
+
+**验证**
+
+- 数据库中的 capability 为密文，日志无 offer/token 原文。
+- API 响应设置 `Cache-Control: no-store`。
+
+### P0.4 Web 端连接验证
+
+**任务**
+
+1. 在 web 中集成 `@getpaseo/client` 与 `@getpaseo/protocol`，验证 Web build 可用。
+2. 实现最小 `PaseoConnectionManager` 接口（`connect`/`disconnect`/`getState`/`subscribe`/`getDaemonClient`）。
+3. 实现浏览器 A：解析测试 offer → 直接连接 Relay/E2EE → 获取 `server_info` → 提交规范化 capability。
+4. 实现浏览器 B：登录 → Host sync → 使用返回配置连接 daemon。
+
+**产出**
+
+- 最小可运行的端到端流程（浏览器 A 配置，浏览器 B 连接）。
+
+**验证**
+
+- 第二浏览器无需重新 pairing 即完成 E2EE handshake。
+- Dashboard 服务端没有到 Relay/daemon 的 socket，无 agent 数据请求。
+- 独立 Web build 不依赖 Paseo App 源码。
+
+### P0.5 M0 退出条件确认
+
+**任务**
+
+1. 检查 Dashboard、反向代理、数据库、日志 fixture 中无 offer/token/完整 connection 原文。
+2. 验证 `@getpaseo/client` 覆盖范围：连接、重连、`server_info`、projects、workspaces、agents、timeline、terminal、prompt、权限。
+3. 记录官方 client 缺口清单，决定哪些由 Dashboard connection manager 补齐。
+
+**产出**
+
+- 官方 client 功能覆盖矩阵。
+- M0 退出条件检查报告。
+
+**验证**
+
+- 所有 M0 退出条件满足（见 `roadmap.md`）。
+
+## P1：单用户自托管 MVP（M1）
+
+> 对应 `roadmap.md` M1。目标：单用户在两浏览器完成登录、同步和删除 Host。
+
+### P1.1 完整认证与会话
+
+**任务**
+
+1. 注册策略：首个用户注册后关闭公开注册。
+2. 密码：Argon2id 哈希，参数按部署基准配置。
+3. Session：access token 短时有效，refresh token 高熵、单次轮换、服务端只存哈希。
+4. Refresh token reuse 检测：撤销整个 token family。
+5. 修改密码：撤销其他 session，轮换当前 refresh token。
+6. 忘记密码：暂不提供（无邮件基础设施时存在攻击面）。未来需要邮件服务 + 管理员 recovery code/CLI 方案后启用。
+7. 登出：撤销当前 session。
+
+**产出**
+
+- 完整认证 API（`/api/v1/auth/*`）与 Web 登录/注册/重置页面。
+
+**验证**
+
+- 负向测试：revoked session 不能 refresh/sync；reuse 检测生效。
+- 登录错误不暴露账号是否存在。
+
+### P1.2 Host 完整生命周期
+
+**任务**
+
+1. 粘贴 offer 流程：前端读取 URL fragment → Paseo parser 校验 → 立即移除 fragment → 客户端连接验证 → 用户命名 → 提交服务端。
+2. 扫码流程：浏览器支持时本地扫码（不上传图像），始终保留粘贴回退。
+3. 服务端：结构校验（不连接 daemon）、envelope encryption 持久化、审计写入。
+4. Host 列表、更新（乐观并发）、删除（tombstone）。
+5. 同步：账号级 `syncRevision`，增量 sync 语义（MVP 可先全量，但保留 revision 语义）。
+
+**产出**
+
+- Host 完整 CRUD + 同步 API，Web 端 Host 列表/添加/设置页面。
+
+**验证**
+
+- 两个浏览器登录同一账号，A 配置后 B 直接看到 Host。
+- 并发更新返回确定 409，不静默覆盖。
+- 删除 Host 后其他在线设备收到 tombstone。
+
+### P1.3 存储加密与审计
+
+**任务**
+
+1. Envelope encryption：随机 256-bit DEK，AEAD 加密 capability JSON，AAD 含 schema/user/host/keyVersion。
+2. KEK 来源：KMS/secret manager 或独立 32-byte key file；启动时拒绝缺失/权限过宽。
+3. 审计事件：注册/登录失败聚合/密码变更/Host 导入删除/账户删除/设备撤销。
+4. 日志 redaction：字段 allowlist，错误对象在进入 logger 前 redact。
+
+**产出**
+
+- 加密存储模块、审计事件表、日志 redaction 中间件。
+
+**验证**
+
+- 数据库 dump 无 KEK 不能恢复 capability。
+- 日志/错误追踪/APM fixture 无 offer/token/完整 connection 原文。
+
+### P1.4 部署与恢复
+
+**任务**
+
+1. 部署文档：反向代理、TLS、CSP、备份加密与恢复演练。
+2. KEK 管理文档：启动检查、备份恢复说明。
+
+**产出**
+
+- `docs/deployment.md`（新增）。
+
+**验证**
+
+- 按文档可恢复备份；KEK 缺失时启动失败并有明确提示。
+
+## P2：多设备登录与 Host 同步（M2）
+
+> 对应 `roadmap.md` M2。目标：多设备并发修改、删除、离线恢复时状态最终一致。
+
+### P2.1 增量同步与冲突
+
+**任务**
+
+1. 实现账号级 revision 单调递增，每个 Host mutation 同一事务写变更。
+2. 增量 sync API：`after` 游标、`limit`、`hasMore`、幂等应用。
+3. Tombstone 保留策略：至少保留到所有活跃设备确认的 revision 超过删除 revision，另设最长保留期。
+4. 冲突检测：更新请求携带 `baseVersion`，冲突返回 409。
+
+**产出**
+
+- 完整增量同步语义（`/api/v1/host-sync`），客户端同步状态机。
+
+**验证**
+
+- 三设备并发修改/删除/离线恢复后状态最终一致。
+- 长期离线设备回来时可强制全量 resync。
+
+### P2.2 设备与 Session 管理
+
+**任务**
+
+1. 设备模型：`installationIdHash`（不使用硬件唯一 ID）、名称、平台、首/末次在线。
+2. 设备列表与远程撤销 API。
+3. Session 列表与撤销 API。
+4. Web 端设备/session 管理页面。
+
+**产出**
+
+- `/api/v1/devices`、`/api/v1/sessions` 及对应页面。
+
+**验证**
+
+- 撤销设备后该设备全部 session 失效；已下载 capability 仍可直接连接（UI 明确提示限制）。
+
+### P2.3 实时配置事件
+
+**任务**
+
+1. 用 SSE/WebSocket 承载多标签页配置事件（仅 Dashboard 配置事件，不承载 daemon 数据）。
+2. 服务端事件推送：Host 变更、设备撤销、session 撤销。
+
+**产出**
+
+- 配置事件通道（与 daemon 数据面分离）。
+
+**验证**
+
+- 网络断言证明该通道只承载配置事件，无 agent 数据。
+
+### P2.4 安全加固
+
+**任务**
+
+1. 完整 rate limit（登录/注册/重置/导入按 IP、账号、设备维度）。
+2. CSRF token 或严格 same-origin + Origin 校验。
+3. CSP：`default-src 'self'`，明确 `connect-src`，禁止不受控第三方脚本。
+4. 审计查询 API（`/api/v1/audit-events`，cursor 分页）。
+
+**产出**
+
+- 安全中间件与审计查询 API。
+
+**验证**
+
+- 越权访问其他用户 Host/审计返回统一 404/403。
+- XSS 测试覆盖 URL fragment 和二维码内容。
+
+## P3：主要 Paseo 功能实现（M3）
+
+> 对应 `roadmap.md` M3。目标：登录后完成目标清单中的主要 daemon 操作。
+
+### P3.1 Connection Manager 完善
+
+**任务**
+
+1. 完善 `PaseoConnectionManager`：多 Host 连接管理、重连策略、状态订阅。
+2. 登出/删除 Host/session 失效时清理本地连接和 capability。
+3. 使用 `server_info.features.*` 的 capability gate 决定功能显示。
+
+**产出**
+
+- 全局连接管理模块（页面不直接创建 `DaemonClient`）。
+
+**验证**
+
+- 官方 client 缺口清单中的项由 connection manager 补齐并通过测试。
+
+### P3.2 Agent 主面板
+
+**任务**
+
+1. Project / Workspace 列表与切换。
+2. Agent 列表、创建、停止、恢复、归档。
+3. Agent 实时输出订阅与页面状态管理。
+
+**产出**
+
+- Agent 主面板页面。
+
+**验证**
+
+- 使用官方 client 调用 daemon 成功；页面状态与 daemon 事件一致。
+
+### P3.3 Timeline 与 Terminal
+
+**任务**
+
+1. Timeline：daemon timeline 消息的展示与分页。
+2. Terminal：使用现有 daemon binary frame 规则，自行实现 Web terminal 页面。
+3. 大数据量处理：分页、虚拟滚动、内存上限。
+
+**产出**
+
+- Timeline 与 Terminal 页面。
+
+**验证**
+
+- 参考 Paseo `docs/timeline-sync.md`、`docs/terminal-performance.md` 与对应 client 源码实现并通过测试。
+
+### P3.4 Prompt 与权限请求
+
+**任务**
+
+1. Prompt 输入区：通过 client 发送。
+2. 权限请求：订阅并响应 daemon 权限消息。
+
+**产出**
+
+- Prompt 与权限处理页面。
+
+**验证**
+
+- 权限请求流程可用；错误处理与 daemon 协议一致。
+
+### P3.5 兼容性测试
+
+**任务**
+
+1. 建立 daemon 版本矩阵（新旧 daemon × 新 client）。
+2. 主要功能兼容 smoke tests。
+3. 新功能使用 `server_info.features.*` gating，不使用未标记 fallback。
+
+**产出**
+
+- 兼容测试套件与版本矩阵记录。
+
+**验证**
+
+- 旧 daemon 经现有 protocol compatibility 工作；无能力依赖未标记 fallback。
+
+## P4：多用户与设备安全（M4）
+
+> 对应 `roadmap.md` M4。目标：租户隔离、key rotation、注册/登录防御。
+
+### P4.1 多用户
+
+**任务**
+
+1. 开放注册/邀请、邮箱验证、管理员策略。
+2. 租户隔离：所有 Host/API 的越权测试覆盖。
+3. 注册/登录/重置/导入 abuse tests。
+
+**产出**
+
+- 多用户注册与隔离测试。
+
+**验证**
+
+- 任何用户不能读取/修改其他用户 Host。
+
+### P4.2 强认证与风险提示
+
+**任务**
+
+1. Passkey 支持（WebAuthn）。
+2. 风险登录提示、精细 session/device 审计。
+
+**产出**
+
+- Passkey 登录流程与审计增强。
+
+**验证**
+
+- Passkey 与密码登录共存且各自有负向测试。
+
+### P4.3 生产密钥管理
+
+**任务**
+
+1. 生产 KMS 集成（替代本地 key file）。
+2. 在线 key rotation：新写入用 active key，后台重包 `encryptedDek`，旧 key decrypt-only，完成后 retiring。
+3. 备份/恢复演练。
+
+**产出**
+
+- KMS 集成与 rotation 工具。
+
+**验证**
+
+- rotation 不停机；旧 key 退休前 decrypt-only 生效。
+
+### P4.4 HostGrant 模型审查
+
+**任务**
+
+1. 设计 `HostGrant` 数据模型（不启用分享语义，仅审查）。
+2. 确认 future 分享不更改 Host 身份，通过 grant 扩展。
+
+**产出**
+
+- `HostGrant` 模型设计（不实现分享 UI）。
+
+**验证**
+
+- 文档明确 grant role 不能超出 daemon 实际能力。
+
+## P5：Harmony 客户端（M5）
+
+> 对应 `roadmap.md` M5。目标：Harmony 使用同一 API 与同步格式完成 daemon 连接。
+
+### P5.1 Runtime 验证
+
+**任务**
+
+1. 真机/模拟器验证：WebSocket binary frame、`ArrayBuffer`、安全随机数、文本编码、`tweetnacl`、npm package 打包。
+2. 决定直接使用 `@getpaseo/client` 或编写 Harmony 运行环境适配。
+
+**产出**
+
+- Harmony runtime capability probe 结论（更新 `docs/paseo-integration.md`）。
+
+**验证**
+
+- 结论基于真机/模拟器事实，不按浏览器环境推测。
+
+### P5.2 认证与安全存储
+
+**任务**
+
+1. Dashboard auth 集成：bearer access + rotating refresh，refresh token 存平台安全存储。
+2. Host sync 集成。
+
+**产出**
+
+- Harmony 端认证与同步模块。
+
+**验证**
+
+- 与 Web 通过同一 API contract test；token 与 capability 存平台安全存储，日志无秘密。
+
+### P5.3 Daemon 连接与最小 UI
+
+**任务**
+
+1. 复用 Paseo daemon connection core，完成 binary frame/E2EE 测试向量。
+2. 最小 Host/Agent UI，再逐步扩展。
+
+**产出**
+
+- Harmony 最小可用客户端。
+
+**验证**
+
+- Harmony 用同步 capability 经 Relay 与 daemon 完成 E2EE。
+
+## P6：可选高级能力（M6）
+
+> 对应 `roadmap.md` M6。仅在退出条件满足后启动。
+
+### P6.1 零知识 Vault
+
+**任务**
+
+1. 设计独立零知识架构（用户解锁秘密派生 vault key，服务端只保存密文）。
+2. 恢复模型与新设备引导设计。
+
+**验证**
+
+- 经独立安全审查后上线；不叠加“半零知识”承诺。
+
+### P6.2 Host 分享与 Protocol 演进
+
+**任务**
+
+1. 在 daemon credental 支持可撤销、可范围化后实现 Host 分享。
+2. 向 Paseo 提议 daemon per-client credential/rotation/revoke 协议变更。
+
+**验证**
+
+- 单用户/设备可被 daemon 真正撤销，不要求轮换所有用户。
+
+### P6.3 自托管 Relay 部署
+
+**任务**
+
+1. 独立 Relay 部署配置（逻辑与 Dashboard 独立）。
+
+**验证**
+
+- Relay 故障不影响 Dashboard 认证与配置管理。
+
+## 依赖关系总览
+
+```text
+P0.1 选型 → P0.2 骨架 → P0.3 最小认证/存储 → P0.4 Web 连接验证 → P0.5 退出确认
+   │
+P1.1 认证 ──────────────▶ P1.2 Host 生命周期 ──▶ P1.3 加密审计 ──▶ P1.4 部署
+   │
+P2.1 增量同步 ──▶ P2.2 设备/session ──▶ P2.3 实时事件 ──▶ P2.4 安全加固
+   │
+P3.1 Connection Manager ──▶ P3.2 Agent 面板 ──▶ P3.3 Timeline/Terminal ──▶ P3.4 Prompt/权限 ──▶ P3.5 兼容
+   │
+P4.1 多用户 ──▶ P4.2 强认证 ──▶ P4.3 密钥管理 ──▶ P4.4 Grant 审查
+   │
+P5.1 Runtime 验证 ──▶ P5.2 认证/存储 ──▶ P5.3 连接/UI
+   │
+P6.1 零知识 ──▶ P6.2 分享/协议 ──▶ P6.3 自托管 Relay
+```
+
+## 关键验收口径（贯穿所有阶段）
+
+- 每个阶段结束前运行 `tests/contract` 与 `tests/e2e`。
+- 所有安全负向测试通过（越权、撤销、重放、日志泄露、缓存泄露、并发冲突）。
+- 网络断言证明 Dashboard 域名无 timeline/terminal/prompt/daemon RPC 流量。
+- 任何 UI 或文档不得暗示“删除 Host/撤销设备”已实现 daemon 层撤销。
