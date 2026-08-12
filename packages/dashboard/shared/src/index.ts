@@ -99,6 +99,8 @@ export interface Device {
   firstSeenAt: string;
   lastSeenAt: string;
   revokedAt: string | null;
+  lastSyncedRevision: number;
+  isCurrentDevice: boolean;
 }
 
 export interface Session {
@@ -180,6 +182,19 @@ export interface SyncResponse {
 
 // ── 审计 ──────────────────────────────────────────────
 
+export type ConfigEventType =
+  | "host.upserted"
+  | "host.deleted"
+  | "device.revoked"
+  | "session.revoked";
+
+export interface ConfigEvent {
+  type: ConfigEventType;
+  revision: number;
+  timestamp: string;
+  data: Record<string, unknown>;
+}
+
 export interface AuditEvent {
   id: Ulid;
   type: string;
@@ -187,4 +202,9 @@ export interface AuditEvent {
   targetId: string;
   metadata: Record<string, unknown>;
   createdAt: string;
+}
+
+export interface AuditEventListResponse {
+  events: AuditEvent[];
+  nextCursor: string | null;
 }

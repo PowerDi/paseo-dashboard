@@ -26,6 +26,7 @@ function makeTestConfig(): { config: ServerConfig; cleanup: () => void } {
     argon2Parallelism: 1,
     registrationOpen: true,
     trustedProxies: [],
+    rateLimitEnabled: false,
   };
 
   return {

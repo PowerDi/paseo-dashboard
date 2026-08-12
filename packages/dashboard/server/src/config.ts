@@ -11,7 +11,8 @@ export interface ServerConfig {
   argon2MemoryCost: number; // KiB
   argon2TimeCost: number; // iterations
   argon2Parallelism: number; // threads
-  registrationOpen: boolean; // 首用户注册后自动关闭
+  registrationOpen: boolean;
+  rateLimitEnabled: boolean; // 首用户注册后自动关闭
   trustedProxies: string[];
 }
 
@@ -30,6 +31,7 @@ export function loadConfig(): ServerConfig {
     argon2TimeCost: 3,
     argon2Parallelism: 4,
     registrationOpen: process.env.PASEO_BOARD_REGISTRATION_OPEN !== "false",
+    rateLimitEnabled: process.env.PASEO_BOARD_RATE_LIMIT_ENABLED !== "false",
     trustedProxies: (process.env.PASEO_BOARD_TRUSTED_PROXIES || "").split(",").filter(Boolean),
   };
 }

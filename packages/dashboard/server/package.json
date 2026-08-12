@@ -13,6 +13,11 @@
       "types": "./src/config.ts",
       "source": "./src/config.ts",
       "default": "./src/config.ts"
+    },
+    "./lib/event-bus": {
+      "types": "./src/lib/event-bus.ts",
+      "source": "./src/lib/event-bus.ts",
+      "default": "./src/lib/event-bus.ts"
     }
   },
   "scripts": {

@@ -24,6 +24,7 @@ export function ensureTables(dataDir: string) {
       platform TEXT NOT NULL,
       first_seen_at TEXT NOT NULL,
       last_seen_at TEXT NOT NULL,
+      last_synced_revision INTEGER NOT NULL DEFAULT 0,
       revoked_at TEXT
     );
     CREATE INDEX IF NOT EXISTS devices_user_installation_idx ON devices(user_id, installation_id_hash);
@@ -36,6 +37,7 @@ export function ensureTables(dataDir: string) {
       refresh_token_hash TEXT NOT NULL,
       family_id TEXT NOT NULL,
       rotation_counter INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL,
       refresh_expires_at TEXT NOT NULL,
       last_used_at TEXT NOT NULL,
@@ -52,6 +54,7 @@ export function ensureTables(dataDir: string) {
       owner_user_id TEXT NOT NULL REFERENCES users(id),
       label TEXT NOT NULL,
       version INTEGER NOT NULL DEFAULT 1,
+      last_sync_revision INTEGER NOT NULL DEFAULT 0,
       capability_fingerprint TEXT,
       idempotency_key TEXT,
       created_at TEXT NOT NULL,
@@ -61,6 +64,7 @@ export function ensureTables(dataDir: string) {
     CREATE INDEX IF NOT EXISTS hosts_owner_idx ON hosts(owner_user_id);
     CREATE INDEX IF NOT EXISTS hosts_fp_idx ON hosts(owner_user_id, capability_fingerprint);
     CREATE INDEX IF NOT EXISTS hosts_idem_idx ON hosts(owner_user_id, idempotency_key);
+    CREATE INDEX IF NOT EXISTS hosts_sync_revision_idx ON hosts(owner_user_id, last_sync_revision);
 
     CREATE TABLE IF NOT EXISTS host_connections (
       id TEXT PRIMARY KEY,
@@ -87,5 +91,28 @@ export function ensureTables(dataDir: string) {
     CREATE INDEX IF NOT EXISTS audit_user_idx ON audit_events(user_id);
     CREATE INDEX IF NOT EXISTS audit_type_idx ON audit_events(type);
   `);
+
+  // Idempotent migration: add created_at column to sessions table.
+  const sessionCols = db.pragma("table_info(sessions)") as Array<{ name: string }>;
+  if (!sessionCols.some((col) => col.name === "created_at")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN created_at TEXT NOT NULL DEFAULT ''");
+  }
+
+  // Idempotent migration: add last_synced_revision column to devices table.
+  const deviceCols = db.pragma("table_info(devices)") as Array<{ name: string }>;
+  if (!deviceCols.some((col) => col.name === "last_synced_revision")) {
+    db.exec("ALTER TABLE devices ADD COLUMN last_synced_revision INTEGER NOT NULL DEFAULT 0");
+  }
+
+  // Idempotent migration: add last_sync_revision column to existing databases.
+  // SQLite doesn't support ADD COLUMN IF NOT EXISTS, so check pragma table_info.
+  const hostCols = db.pragma("table_info(hosts)") as Array<{ name: string }>;
+  if (!hostCols.some((col) => col.name === "last_sync_revision")) {
+    db.exec("ALTER TABLE hosts ADD COLUMN last_sync_revision INTEGER NOT NULL DEFAULT 0");
+    db.exec(
+      "CREATE INDEX IF NOT EXISTS hosts_sync_revision_idx ON hosts(owner_user_id, last_sync_revision)",
+    );
+  }
+
   db.close();
 }

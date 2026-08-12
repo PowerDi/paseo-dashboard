@@ -9,7 +9,7 @@
 - **仓库**：Paseo monorepo fork — `git@github.com:PowerDi/paseo-dashboard.git`
 - **代码位置**：`/root/workspace/code/paseo/packages/dashboard/`
 - **Paseo 源码**：`/root/workspace/code/paseo/`（monorepo 根，作为行为事实来源）
-- **当前阶段**：M1 完成（P0-P1.4 全部完成），可进入 P2 或 P3。
+- **当前阶段**：M2 完成（P0-P2.4 全部完成），可进入 P3。
 - **当前分支**：`feat/dashboard-migration`（已推送到 origin）
 
 ## Git 协作
@@ -26,18 +26,18 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 
 ## 文档地图
 
-| 文件 | 内容 | 使用场景 |
-| --- | --- | --- |
-| `AGENTS.md` | 事实来源、架构边界、敏感数据规则、API 与客户端准则、目录职责、Paseo 集成规则、实现与安全规则 | 所有开发任务开始前必须读 |
-| `docs/product-requirements.md` | 产品定义、目标/非目标、用户流程、页面信息架构、验收标准 | web/ 和 harmony/ 开发前必读 |
-| `docs/architecture.md` | 系统边界、应用划分、目录职责、数据模型、API 设计、删除语义、技术栈 | 所有开发任务读涉及的部分 |
-| `docs/roadmap.md` | M0-M6 的里程碑定义、范围、退出条件、风险 | 规划阶段和判断功能是否进入当前版本 |
-| `docs/development-plan.md` | 将 roadmap 拆解为可执行子任务序列，含依赖关系和验证标准 | 当前开发阶段参照 |
-| `docs/open-decisions.md` | 待定决策（已定项标记为"已决定"） | 需要决策时查阅 |
-| `docs/paseo-integration.md` | 官方 client/protocol 用法、Relay E2EE 边界、Dashboard 连接层、页面平移原则、兼容策略 | 所有涉及 Paseo 通信的任务 |
-| `docs/security.md` | 保护目标、信任边界、pairing 安全、存储加密、认证方案、撤销语义、审计规则、安全测试 | 所有安全相关任务 |
-| `docs/deployment.md` | 部署指南：环境变量、KEK 管理、反代、备份、安全检查清单 | 部署和运维 |
-| `docs/m0-exit-report.md` | M0 退出条件检查报告：敏感数据检查、client 覆盖矩阵、缺口清单 | M0 退出确认 |
+| 文件                           | 内容                                                                                         | 使用场景                           |
+| ------------------------------ | -------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `AGENTS.md`                    | 事实来源、架构边界、敏感数据规则、API 与客户端准则、目录职责、Paseo 集成规则、实现与安全规则 | 所有开发任务开始前必须读           |
+| `docs/product-requirements.md` | 产品定义、目标/非目标、用户流程、页面信息架构、验收标准                                      | web/ 和 harmony/ 开发前必读        |
+| `docs/architecture.md`         | 系统边界、应用划分、目录职责、数据模型、API 设计、删除语义、技术栈                           | 所有开发任务读涉及的部分           |
+| `docs/roadmap.md`              | M0-M6 的里程碑定义、范围、退出条件、风险                                                     | 规划阶段和判断功能是否进入当前版本 |
+| `docs/development-plan.md`     | 将 roadmap 拆解为可执行子任务序列，含依赖关系和验证标准                                      | 当前开发阶段参照                   |
+| `docs/open-decisions.md`       | 待定决策（已定项标记为"已决定"）                                                             | 需要决策时查阅                     |
+| `docs/paseo-integration.md`    | 官方 client/protocol 用法、Relay E2EE 边界、Dashboard 连接层、页面平移原则、兼容策略         | 所有涉及 Paseo 通信的任务          |
+| `docs/security.md`             | 保护目标、信任边界、pairing 安全、存储加密、认证方案、撤销语义、审计规则、安全测试           | 所有安全相关任务                   |
+| `docs/deployment.md`           | 部署指南：环境变量、KEK 管理、反代、备份、安全检查清单                                       | 部署和运维                         |
+| `docs/m0-exit-report.md`       | M0 退出条件检查报告：敏感数据检查、client 覆盖矩阵、缺口清单                                 | M0 退出确认                        |
 
 ## 当前状态
 
@@ -55,6 +55,10 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 - [x] **P1.2 Host 完整生命周期**：Host 更新（乐观并发 409）；capability fingerprint 去重；幂等键；sync 返回 tombstone。8 个新测试。
 - [x] **P1.3 存储加密与审计**：审计事件补齐（login_failed、logout）；setErrorHandler；redaction 增强；KEK 权限检查；IP 截断。
 - [x] **P1.4 部署与恢复**：`docs/deployment.md`。
+- [x] **P2.1 增量同步与冲突**：hosts 表加 `lastSyncRevision` 列；重写 sync API 按 `lastSyncRevision > after` 游标查询；Web 端同步状态机（localStorage 持久化、分页、幂等、全量 resync）；8 个契约测试。
+- [x] **P2.2 设备与 Session 管理**：devices 加 `lastSyncRevision`、sessions 加 `createdAt`；GET/DELETE `/devices` 和 `/sessions` 路由；sync 追踪设备 revision；9 个契约测试。
+- [x] **P2.3 实时配置事件**：in-memory `ConfigEventBus`（按 userId 分区）；SSE `/events` 端点；mutation 路径（import/update/delete/revoke）触发事件；10 个测试（5 单元 + 5 集成）。
+- [x] **P2.4 安全加固**：内存 rate limiter（login/register/refresh/change-password 按 IP）；Origin 校验（状态变更请求）；CSP/X-Frame-Options/nosniff headers；审计查询 API `/audit-events`（ULID cursor 分页）；14 个安全测试（跨用户隔离、rate limit、Origin、CSP、审计）。
 - [x] **Git 仓库初始化**：paseo-board 独立仓库基线 commit `09b5a63`。
 - [x] **迁移到 Paseo monorepo**：paseo-board 代码迁移到 `packages/dashboard/`，分支 `feat/dashboard-migration`，commit `3b0ca1c03`，推送到 origin。
 
@@ -62,13 +66,13 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 
 迁移时做了以下调整以适配 Paseo monorepo：
 
-| 改动 | 原因 |
-| --- | --- |
-| 包名 `@paseo-board/*` → `@getpaseo/dashboard-*` | 匹配 monorepo 命名 |
-| `DaemonClient` 从 `@getpaseo/client` 改为 `@getpaseo/client/internal/daemon-client` | 当前 Paseo 版本不再从主入口导出 DaemonClient |
-| React 18 → 19.1.0 | 匹配 monorepo |
-| vite.config.ts relay e2ee 路径 | monorepo 目录层级不同 |
-| 根 package.json 增加 dashboard workspaces + 脚本 | `dev:dashboard:server`、`dev:dashboard:web`、`build:dashboard`、`test:dashboard`、`typecheck:dashboard` |
+| 改动                                                                                | 原因                                                                                                    |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 包名 `@paseo-board/*` → `@getpaseo/dashboard-*`                                     | 匹配 monorepo 命名                                                                                      |
+| `DaemonClient` 从 `@getpaseo/client` 改为 `@getpaseo/client/internal/daemon-client` | 当前 Paseo 版本不再从主入口导出 DaemonClient                                                            |
+| React 18 → 19.1.0                                                                   | 匹配 monorepo                                                                                           |
+| vite.config.ts relay e2ee 路径                                                      | monorepo 目录层级不同                                                                                   |
+| 根 package.json 增加 dashboard workspaces + 脚本                                    | `dev:dashboard:server`、`dev:dashboard:web`、`build:dashboard`、`test:dashboard`、`typecheck:dashboard` |
 
 ### 进行中
 
@@ -182,7 +186,7 @@ npm run typecheck:dashboard
 
 ### 测试统计
 
-- web 2 + contract 34 + e2e vitest 8 = **42 测试**全量通过。
+- web 2 + contract 75 + e2e vitest 8 = **85 测试**全量通过。
 - Playwright 浏览器 E2E 3 测试（需 `PLAYWRIGHT_BROWSERS_PATH=/tmp/playwright-browsers`）。
 - Lefthook pre-commit hook 会跑全 monorepo typecheck（含 app/desktop/cli），这些包有预先存在的 typecheck 错误，不是 dashboard 引入的。dashboard 的 `typecheck:dashboard` 全部通过。提交时可用 `--no-verify` 绕过。
 
@@ -199,15 +203,19 @@ npm run typecheck:dashboard
 
 ## 修改记录
 
-| 日期 | 修改人 | 说明 |
-| --- | --- | --- |
-| 2026-08-12 | Codex | 初版创建 |
-| 2026-08-12 | Codex | 完成 P0.1 选型 + P0.2 骨架 |
-| 2026-08-12 | Codex | 完成 P0.3 最小认证与 Host 存储 |
-| 2026-08-12 | Codex | 完成 P0.4 Web 连接代码 |
-| 2026-08-12 | Codex | P0.5 完成：M0 退出条件全部满足 |
-| 2026-08-12 | Codex | P1.1 完成：Argon2id、access/refresh 分离、reuse 检测 |
-| 2026-08-12 | Codex | P1.2 完成：Host 更新、fingerprint 去重、幂等键 |
-| 2026-08-12 | Codex | P1.3 完成：审计事件补齐、setErrorHandler、KEK 权限检查 |
-| 2026-08-12 | Codex | P1.4 完成：部署文档 |
-| 2026-08-12 | Codex | 迁移到 Paseo monorepo `packages/dashboard/`，分支 `feat/dashboard-migration`，commit `3b0ca1c03` |
+| 日期       | 修改人 | 说明                                                                                             |
+| ---------- | ------ | ------------------------------------------------------------------------------------------------ |
+| 2026-08-12 | Codex  | 初版创建                                                                                         |
+| 2026-08-12 | Codex  | 完成 P0.1 选型 + P0.2 骨架                                                                       |
+| 2026-08-12 | Codex  | 完成 P0.3 最小认证与 Host 存储                                                                   |
+| 2026-08-12 | Codex  | 完成 P0.4 Web 连接代码                                                                           |
+| 2026-08-12 | Codex  | P0.5 完成：M0 退出条件全部满足                                                                   |
+| 2026-08-12 | Codex  | P1.1 完成：Argon2id、access/refresh 分离、reuse 检测                                             |
+| 2026-08-12 | Codex  | P1.2 完成：Host 更新、fingerprint 去重、幂等键                                                   |
+| 2026-08-12 | Codex  | P1.3 完成：审计事件补齐、setErrorHandler、KEK 权限检查                                           |
+| 2026-08-12 | Codex  | P1.4 完成：部署文档                                                                              |
+| 2026-08-12 | Codex  | P2.1 完成：增量同步（lastSyncRevision、sync API、client store、8 测试）                          |
+| 2026-08-12 | Codex  | P2.2 完成：设备/Session 管理 API + 设备追踪 + 9 测试                                             |
+| 2026-08-12 | Codex  | P2.3 完成：SSE 配置事件总线 + 事件分发 + 10 测试                                                 |
+| 2026-08-12 | Codex  | P2.4 完成：安全加固（rate limit/CSRF/CSP/审计 API）+ 14 测试                                     |
+| 2026-08-12 | Codex  | 迁移到 Paseo monorepo `packages/dashboard/`，分支 `feat/dashboard-migration`，commit `3b0ca1c03` |

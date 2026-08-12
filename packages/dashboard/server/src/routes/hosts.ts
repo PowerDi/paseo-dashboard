@@ -7,6 +7,7 @@ import { hosts, hostConnections, users, auditEvents } from "../db/schema.js";
 import { EnvelopeEncryptor, capabilityFingerprint } from "../lib/encryption.js";
 import { ErrorCodes } from "@getpaseo/dashboard-shared";
 import type { Db } from "../db/index.js";
+import type { ConfigEventBus } from "../lib/event-bus.js";
 
 /**
  * Derive a domain-separated HMAC secret from the KEK for capability
@@ -18,6 +19,7 @@ export function registerHostRoutes(
   db: Db,
   encryptor: EnvelopeEncryptor,
   fingerprintSecret: Buffer,
+  eventBus: ConfigEventBus,
 ) {
   const auth = requireAuth(db);
 
@@ -161,6 +163,7 @@ export function registerHostRoutes(
           ownerUserId: userId,
           label,
           version: 1,
+          lastSyncRevision: newRevision,
           capabilityFingerprint: fp,
           idempotencyKey,
           createdAt: now,
@@ -197,6 +200,13 @@ export function registerHostRoutes(
           createdAt: now,
         })
         .run();
+    });
+
+    eventBus.emit(userId, {
+      type: "host.upserted",
+      revision: newRevision,
+      timestamp: now,
+      data: { hostId },
     });
 
     rep.header("Cache-Control", "no-store");
@@ -305,7 +315,12 @@ export function registerHostRoutes(
 
     db.transaction((tx) => {
       tx.update(hosts)
-        .set({ label: label.trim(), version: newVersion, updatedAt: now })
+        .set({
+          label: label.trim(),
+          version: newVersion,
+          lastSyncRevision: newRevision,
+          updatedAt: now,
+        })
         .where(eq(hosts.id, id))
         .run();
       tx.update(users)
@@ -350,6 +365,12 @@ export function registerHostRoutes(
     }
 
     rep.header("Cache-Control", "no-store");
+    eventBus.emit(userId, {
+      type: "host.upserted",
+      revision: newRevision,
+      timestamp: now,
+      data: { hostId: id },
+    });
     return {
       host: {
         id,
@@ -380,7 +401,10 @@ export function registerHostRoutes(
     const newRevision = userRow[0].syncRevision + 1;
 
     db.transaction((tx) => {
-      tx.update(hosts).set({ deletedAt: now, updatedAt: now }).where(eq(hosts.id, id)).run();
+      tx.update(hosts)
+        .set({ deletedAt: now, lastSyncRevision: newRevision, updatedAt: now })
+        .where(eq(hosts.id, id))
+        .run();
       tx.update(users)
         .set({ syncRevision: newRevision, updatedAt: now })
         .where(eq(users.id, userId))
@@ -399,6 +423,13 @@ export function registerHostRoutes(
     });
 
     rep.header("Cache-Control", "no-store");
+    eventBus.emit(userId, {
+      type: "host.deleted",
+      revision: newRevision,
+      timestamp: now,
+      data: { hostId: id },
+    });
+
     return { ok: true, syncRevision: newRevision };
   });
 }

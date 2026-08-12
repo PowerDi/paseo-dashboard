@@ -29,6 +29,7 @@ function makeTestConfig(overrides?: Partial<ServerConfig>): {
     argon2Parallelism: 1,
     registrationOpen: true,
     trustedProxies: [],
+    rateLimitEnabled: false,
     ...overrides,
   };
 

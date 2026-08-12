@@ -9,6 +9,12 @@ import { EnvelopeEncryptor } from "./lib/encryption.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerHostRoutes } from "./routes/hosts.js";
 import { registerSyncRoutes } from "./routes/sync.js";
+import { registerDeviceRoutes } from "./routes/devices.js";
+import { registerSessionRoutes } from "./routes/sessions.js";
+import { registerEventRoutes } from "./routes/events.js";
+import { registerAuditRoutes } from "./routes/audit.js";
+import { ConfigEventBus } from "./lib/event-bus.js";
+import { setupSecurity } from "./lib/security.js";
 import type { ServerConfig } from "./config.js";
 
 /** Truncate IPv4 to /24, IPv6 to /64 for audit storage. */
@@ -96,11 +102,20 @@ export function buildApp(config: ServerConfig) {
     });
   });
 
+  // Security middleware (rate limit, Origin validation, CSP)
+  setupSecurity(app, config.corsOrigin, config.rateLimitEnabled);
+
   // Routes
   app.get("/health", async () => ({ status: "ok", version: "0.1.0" }));
   registerAuthRoutes(app, db, config);
-  registerHostRoutes(app, db, encryptor, fingerprintSecret);
+  const eventBus = new ConfigEventBus();
+  app.decorate("eventBus", eventBus);
+  registerEventRoutes(app, db, eventBus);
+  registerHostRoutes(app, db, encryptor, fingerprintSecret, eventBus);
   registerSyncRoutes(app, db, encryptor);
+  registerDeviceRoutes(app, db, eventBus);
+  registerSessionRoutes(app, db, eventBus);
+  registerAuditRoutes(app, db);
 
   return app;
 }
