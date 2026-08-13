@@ -168,6 +168,11 @@ function AuthenticatedApp() {
     }
   }
 
+  async function resumeAgent(hostId: string, agentId: string) {
+    const agent = await dashboardRuntime.resumeAgent(hostId, agentId);
+    selectAgent(hostId, agent.id);
+  }
+
   return (
     <>
       <Shell
@@ -183,6 +188,9 @@ function AuthenticatedApp() {
           {page === "workspace" && (
             <WorkspacePage
               context={selectedContext}
+              hosts={hosts}
+              runtimes={runtimes}
+              onSelectAgent={selectAgent}
               onCancelAgent={cancelAgent}
               onArchiveAgent={archiveAgent}
             />
@@ -203,6 +211,7 @@ function AuthenticatedApp() {
               onSelectAgent={selectAgent}
               onCancelAgent={cancelAgent}
               onArchiveAgent={archiveAgent}
+              onResumeAgent={resumeAgent}
             />
           )}
           {page === "devices" && <DevicesPage />}

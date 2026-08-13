@@ -36,11 +36,23 @@ const en: typeof zhCN = {
   workspace: {
     emptyTitle: "Start a session",
     emptySubtitle: "Pick a session from the sidebar, or add a host first.",
-    selectProject: "Select project",
-    composerUnavailable: "Sending opens once the timeline is wired up",
     composerAria: "Message composer",
+    composerPlaceholder: "Send a message. Enter to send, Shift+Enter for a new line",
     messageInputAria: "Message input",
     send: "Send message",
+    sendFailed: "Failed to send: {{message}}",
+    newSession: {
+      projectAria: "Select project",
+      providerAria: "Select provider",
+      noProjects: "No projects available, connect a host first",
+      promptPlaceholder: "Describe the task to start a new session…",
+      create: "Create session",
+    },
+    permissions: {
+      allow: "Allow",
+      deny: "Deny",
+      respondFailed: "Failed to respond to the permission request: {{message}}",
+    },
     messagesAria: "{{title}} messages",
     untitledAgent: "Untitled agent",
     timeline: {
@@ -97,6 +109,8 @@ const en: typeof zhCN = {
     empty: "No agent sessions yet.",
     stop: "Stop",
     archive: "Archive",
+    archived: "Archived",
+    resume: "Resume",
     actionFailed: "Action failed: {{message}}",
     status: {
       running: "Running",

@@ -1,4 +1,6 @@
 import type { Host } from "@getpaseo/dashboard-shared";
+import type { AgentPermissionResponse } from "@getpaseo/protocol/agent-types";
+import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
 import type { StoreApi } from "zustand/vanilla";
 import {
   createDaemonDataStore,
@@ -52,6 +54,19 @@ export interface DashboardPaseoRuntime {
   verifyConnection(host: Host): Promise<{ serverVersion: string }>;
   archiveAgent(hostId: string, agentId: string): Promise<void>;
   cancelAgent(hostId: string, agentId: string): Promise<void>;
+  sendAgentMessage(hostId: string, agentId: string, text: string): Promise<void>;
+  createAgent(
+    hostId: string,
+    options: { provider: string; cwd: string; workspaceId?: string; initialPrompt?: string },
+  ): Promise<AgentSnapshotPayload>;
+  /** Resumes an archived agent through its persistence handle. Returns the resumed snapshot. */
+  resumeAgent(hostId: string, agentId: string): Promise<AgentSnapshotPayload>;
+  respondToPermission(
+    hostId: string,
+    agentId: string,
+    requestId: string,
+    response: AgentPermissionResponse,
+  ): Promise<void>;
   /**
    * Marks an agent as viewed: subscribes the daemon's selective timeline
    * stream to it and loads the latest tail page.
@@ -240,6 +255,60 @@ export function createDashboardRuntime(
 
     async cancelAgent(hostId, agentId) {
       await requireClient(hostId).cancelAgent(agentId);
+    },
+
+    async sendAgentMessage(hostId, agentId, text) {
+      await requireClient(hostId).sendAgentMessage(agentId, text);
+    },
+
+    async createAgent(hostId, options) {
+      const agent = await requireClient(hostId).createAgent({
+        provider: options.provider,
+        cwd: options.cwd,
+        ...(options.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
+        ...(options.initialPrompt ? { initialPrompt: options.initialPrompt } : {}),
+      });
+      // The snapshot has no placement; the store's upsert falls back to a full
+      // refresh, which files the agent under the right project.
+      daemonDataStore.getState().applyAgentUpdate(hostId, { kind: "upsert", agent });
+      return agent;
+    },
+
+    async resumeAgent(hostId, agentId) {
+      const entry = daemonDataStore
+        .getState()
+        .byHost.get(hostId)
+        ?.agents.data.find((candidate) => candidate.agent.id === agentId);
+      if (!entry) throw new Error(`Agent ${agentId} not loaded for host ${hostId}`);
+      if (!entry.agent.persistence) {
+        throw new Error(`Agent ${agentId} has no persistence handle to resume from`);
+      }
+      const agent = await requireClient(hostId).resumeAgent(entry.agent.persistence);
+      daemonDataStore
+        .getState()
+        .applyAgentUpdate(hostId, { kind: "upsert", agent, project: entry.project });
+      return agent;
+    },
+
+    async respondToPermission(hostId, agentId, requestId, response) {
+      await requireClient(hostId).respondToPermission(agentId, requestId, response);
+      // Clear the request locally; the daemon's agent_update broadcast is the
+      // source of truth but can lag behind the click.
+      const entry = daemonDataStore
+        .getState()
+        .byHost.get(hostId)
+        ?.agents.data.find((candidate) => candidate.agent.id === agentId);
+      if (!entry) return;
+      daemonDataStore.getState().applyAgentUpdate(hostId, {
+        kind: "upsert",
+        agent: {
+          ...entry.agent,
+          pendingPermissions: entry.agent.pendingPermissions.filter(
+            (permission) => permission.id !== requestId,
+          ),
+        },
+        project: entry.project,
+      });
     },
 
     async viewAgent(hostId, agentId) {

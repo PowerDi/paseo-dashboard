@@ -279,7 +279,7 @@
 **任务**
 
 1. ~~Project / Workspace 列表与切换。~~ 完成。
-2. Agent 列表、创建、停止、恢复、归档。**列表/停止/归档完成；创建与恢复未做**（`createAgent`、`resumeAgent` 零处调用）。创建入口需要 prompt 输入，跟 P3.4 一起做。
+2. Agent 列表、创建、停止、恢复、归档。**全部完成**（创建与恢复在 P3.4 落地：新建会话 composer + Agents 页归档区恢复入口）。
 3. ~~Agent 实时输出订阅与页面状态管理。~~ 完成（`agent_update`/`workspace_update`/`project.update` 订阅 + 重连补拉）。
 4. 路由（`roadmap.md` M3 范围里的「路由」）：**未做**。`main.tsx` 只注册 `/` 一条路由，页面和 agent 选择都是 `App.tsx` 的 `useState`，react-router-dom 装了没用。结果是没有 per-page URL、没有 agent 深链、刷新回到空态。做深链要先把导航状态搬进 router。
 
@@ -309,20 +309,20 @@
 
 ### P3.4 Prompt 与权限请求
 
-**未开始。** composer 当前是 `disabled` 占位。
+**已完成。**
 
 **任务**
 
-1. Prompt 输入区：通过 client 发送（`sendMessage`/`sendAgentMessage`），并补上 P3.2 遗留的 `createAgent`/`resumeAgent` 入口。
-2. 权限请求：订阅并响应 daemon 权限消息（`respondToPermission`）。权限有两条来源：agent 快照的 `pendingPermissions`（现在只显示计数）和 `agent_stream` 的 `permission_requested`/`permission_resolved`（现在只用来触发 tail 重拉）。`AgentTimelineItem` union 里没有权限类型，不要按 timeline 条目建模。
+1. Prompt 输入区：通过 client 发送（`sendMessage`/`sendAgentMessage`），并补上 P3.2 遗留的 `createAgent`/`resumeAgent` 入口。**完成**：Workspace composer 接 `runtime.sendAgentMessage`（Enter 发送）；空态 composer 变成新建会话入口（`components/new-session-composer.tsx`：主机·项目选择 + provider 选择 + initialPrompt → `runtime.createAgent`，成功后自动选中新 agent）；Agents 页新增「已归档」区，带 `persistence` handle 的条目可恢复（`runtime.resumeAgent` 走 handle，恢复后选中返回的快照 id）。
+2. 权限请求：订阅并响应 daemon 权限消息（`respondToPermission`）。**完成**：`components/permission-requests.tsx` 渲染 agent 快照的 `pendingPermissions`（有 `actions` 时按 action 的 behavior/variant 出按钮，否则默认允许/拒绝），点击走 `runtime.respondToPermission`（响应后本地先移除该请求，等 `agent_update` 广播兜底）。权限卡片渲染在 timeline 末尾，随自动滚底进入视野。未按 timeline 条目建模。
 
 **产出**
 
-- Prompt 与权限处理页面。
+- Workspace composer（发消息 + 新建会话）、权限请求卡片、Agents 页归档区与恢复入口；runtime 新增 `sendAgentMessage`/`createAgent`/`resumeAgent`/`respondToPermission` 四个方法（`DaemonClientLike` Pick 同步扩展）。
 
 **验证**
 
-- 权限请求流程可用；错误处理与 daemon 协议一致。
+- runtime 5 个新单测 + agent-tree 归档行单测；Playwright 实测（真实 daemon + codex）：空态创建会话 → initialPrompt 进 timeline → 收到精确回复 → composer 发第二条消息 → 收到回复 → 归档 → Agents 页出现「已归档」区。权限卡片的真实触发未复现（该 daemon 的 codex 模式自动放行 shell 命令），响应链路由单测覆盖。
 
 ### P3.5 兼容性测试
 

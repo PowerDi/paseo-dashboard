@@ -160,3 +160,22 @@ export function buildAgentRows(
       Date.parse(a.entry.agent.updatedAt || a.entry.agent.createdAt),
   );
 }
+
+export function buildArchivedAgentRows(
+  hosts: readonly Host[],
+  runtimes: ReadonlyMap<string, DashboardHostRuntimeState>,
+): AgentListRow[] {
+  const rows: AgentListRow[] = [];
+  for (const host of hosts) {
+    const entries = runtimes.get(host.id)?.daemonData?.agents.data ?? [];
+    for (const entry of entries) {
+      if (isActiveAgent(entry)) continue;
+      rows.push({ hostId: host.id, hostLabel: host.label, entry });
+    }
+  }
+  return rows.sort(
+    (a, b) =>
+      Date.parse(b.entry.agent.archivedAt ?? b.entry.agent.updatedAt) -
+      Date.parse(a.entry.agent.archivedAt ?? a.entry.agent.updatedAt),
+  );
+}

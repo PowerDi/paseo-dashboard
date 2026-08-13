@@ -34,11 +34,23 @@ export default {
   workspace: {
     emptyTitle: "开始会话",
     emptySubtitle: "从侧栏选择一个会话，或先添加一台主机。",
-    selectProject: "选择项目",
-    composerUnavailable: "消息发送将在时间线接入后开放",
     composerAria: "消息输入框",
+    composerPlaceholder: "发送消息，Enter 发送，Shift+Enter 换行",
     messageInputAria: "消息输入",
     send: "发送消息",
+    sendFailed: "发送失败：{{message}}",
+    newSession: {
+      projectAria: "选择项目",
+      providerAria: "选择提供方",
+      noProjects: "没有可用项目，先连接一台主机",
+      promptPlaceholder: "描述任务，创建新会话…",
+      create: "创建会话",
+    },
+    permissions: {
+      allow: "允许",
+      deny: "拒绝",
+      respondFailed: "响应权限请求失败：{{message}}",
+    },
     messagesAria: "{{title}} 的消息",
     untitledAgent: "未命名代理",
     timeline: {
@@ -95,6 +107,8 @@ export default {
     empty: "还没有代理会话。",
     stop: "停止",
     archive: "归档",
+    archived: "已归档",
+    resume: "恢复",
     actionFailed: "操作失败：{{message}}",
     status: {
       running: "运行中",

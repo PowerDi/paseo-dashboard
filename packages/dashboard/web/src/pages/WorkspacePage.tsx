@@ -5,12 +5,16 @@ import {
   Clock,
   Folder,
   GitBranch,
+  LoaderCircle,
   ShieldQuestion,
   Square,
   Terminal,
 } from "lucide-react";
+import type { Host } from "@getpaseo/dashboard-shared";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { NewSessionComposer } from "@/components/new-session-composer";
+import { PermissionRequests } from "@/components/permission-requests";
 import { TimelineView } from "@/components/timeline";
 import { WorkspaceTerminal } from "@/components/workspace-terminal";
 import { Button } from "@/components/ui/button";
@@ -19,9 +23,14 @@ import type { AgentContext } from "@/lib/agent-tree";
 import { sessionStatus } from "@/lib/agent-tree";
 import { formatDateTime } from "@/lib/format-time";
 import { cn } from "@/lib/utils";
+import type { DashboardHostRuntimeState } from "@/paseo/dashboardRuntime";
+import { dashboardRuntime } from "@/paseo/dashboardRuntime";
 
 interface WorkspacePageProps {
   context: AgentContext | null;
+  hosts: readonly Host[];
+  runtimes: ReadonlyMap<string, DashboardHostRuntimeState>;
+  onSelectAgent: (hostId: string, agentId: string) => void;
   onCancelAgent: (hostId: string, agentId: string) => Promise<void>;
   onArchiveAgent: (hostId: string, agentId: string) => Promise<void>;
 }
@@ -44,9 +53,17 @@ function MetaRow({ icon, label, value }: { icon: React.ReactNode; label: string;
   );
 }
 
-export function WorkspacePage({ context, onCancelAgent, onArchiveAgent }: WorkspacePageProps) {
+export function WorkspacePage({
+  context,
+  hosts,
+  runtimes,
+  onSelectAgent,
+  onCancelAgent,
+  onArchiveAgent,
+}: WorkspacePageProps) {
   const { t, i18n } = useTranslation();
   const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
   const [pending, setPending] = useState<"cancel" | "archive" | null>(null);
   const [view, setView] = useState<"timeline" | "terminal">("timeline");
   const agentId = context?.entry.agent.id ?? null;
@@ -73,7 +90,27 @@ export function WorkspacePage({ context, onCancelAgent, onArchiveAgent }: Worksp
   useEffect(() => {
     lastSeqRef.current = -1;
     setView("timeline");
+    setDraft("");
   }, [agentId]);
+
+  async function sendDraft() {
+    if (!hostId || !agentId || sending) return;
+    const text = draft.trim();
+    if (!text) return;
+    setSending(true);
+    try {
+      await dashboardRuntime.sendAgentMessage(hostId, agentId, text);
+      setDraft("");
+    } catch (error) {
+      window.alert(
+        t("workspace.sendFailed", {
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    } finally {
+      setSending(false);
+    }
+  }
 
   function runAction(kind: "cancel" | "archive", action: () => Promise<void>) {
     return async () => {
@@ -102,24 +139,7 @@ export function WorkspacePage({ context, onCancelAgent, onArchiveAgent }: Worksp
           <p className="workspace-empty-title">{t("workspace.emptyTitle")}</p>
           <p className="workspace-empty-subtitle">{t("workspace.emptySubtitle")}</p>
         </div>
-        <footer className="workspace-composer" aria-label={t("workspace.composerAria")}>
-          <div className="workspace-composer-project">
-            <Folder size={14} />
-            <span>{t("workspace.selectProject")}</span>
-          </div>
-          <div className="workspace-composer-input">
-            <textarea
-              aria-label={t("workspace.messageInputAria")}
-              disabled
-              placeholder={t("workspace.composerUnavailable")}
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-            />
-            <button className="workspace-composer-send" aria-label={t("workspace.send")} disabled>
-              <ArrowUp size={17} />
-            </button>
-          </div>
-        </footer>
+        <NewSessionComposer hosts={hosts} runtimes={runtimes} onCreated={onSelectAgent} />
       </>
     );
   }
@@ -243,6 +263,22 @@ export function WorkspacePage({ context, onCancelAgent, onArchiveAgent }: Worksp
             </div>
 
             <TimelineView timeline={timeline} onLoadOlder={loadOlder} />
+
+            {agent.pendingPermissions.length > 0 && (
+              <div className="mt-4">
+                <PermissionRequests
+                  requests={agent.pendingPermissions}
+                  onRespond={(requestId, response) =>
+                    dashboardRuntime.respondToPermission(
+                      context.host.id,
+                      agent.id,
+                      requestId,
+                      response,
+                    )
+                  }
+                />
+              </div>
+            )}
           </section>
         </div>
       )}
@@ -256,13 +292,27 @@ export function WorkspacePage({ context, onCancelAgent, onArchiveAgent }: Worksp
           <div className="workspace-composer-input">
             <textarea
               aria-label={t("workspace.messageInputAria")}
-              disabled
-              placeholder={t("workspace.composerUnavailable")}
+              placeholder={t("workspace.composerPlaceholder")}
               value={draft}
+              disabled={sending}
               onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || event.shiftKey) return;
+                event.preventDefault();
+                void sendDraft();
+              }}
             />
-            <button className="workspace-composer-send" aria-label={t("workspace.send")} disabled>
-              <ArrowUp size={17} />
+            <button
+              className="workspace-composer-send"
+              aria-label={t("workspace.send")}
+              disabled={sending || draft.trim().length === 0}
+              onClick={() => void sendDraft()}
+            >
+              {sending ? (
+                <LoaderCircle size={15} className="animate-spin" />
+              ) : (
+                <ArrowUp size={17} />
+              )}
             </button>
           </div>
         </footer>

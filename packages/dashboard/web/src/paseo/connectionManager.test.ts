@@ -80,6 +80,20 @@ class FakeClient implements DaemonClientLike {
 
   async setAgentTimelineSubscription(): Promise<void> {}
 
+  sendAgentMessage(): never {
+    throw new Error("not implemented in fake");
+  }
+
+  createAgent(): never {
+    throw new Error("not implemented in fake");
+  }
+
+  resumeAgent(): never {
+    throw new Error("not implemented in fake");
+  }
+
+  async respondToPermission(): Promise<void> {}
+
   listTerminals(): never {
     throw new Error("not implemented in fake");
   }

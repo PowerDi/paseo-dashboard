@@ -1,11 +1,12 @@
 import type { Host } from "@getpaseo/dashboard-shared";
-import { Archive, Bot, Square } from "lucide-react";
+import { Archive, ArchiveRestore, Bot, Square } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SectionLabel } from "@/components/section-label";
 import { Button } from "@/components/ui/button";
 import {
   buildAgentRows,
+  buildArchivedAgentRows,
   sessionStatus,
   type AgentListRow,
   type SessionStatus,
@@ -22,6 +23,7 @@ interface AgentsPageProps {
   onSelectAgent: (hostId: string, agentId: string) => void;
   onCancelAgent: (hostId: string, agentId: string) => Promise<void>;
   onArchiveAgent: (hostId: string, agentId: string) => Promise<void>;
+  onResumeAgent: (hostId: string, agentId: string) => Promise<void>;
 }
 
 const statusTokens: Record<SessionStatus, { color: string; className: string }> = {
@@ -127,6 +129,60 @@ function AgentRow({
   );
 }
 
+function ArchivedAgentRow({ row, onResume }: { row: AgentListRow; onResume: () => Promise<void> }) {
+  const { t, i18n } = useTranslation();
+  const [pending, setPending] = useState(false);
+  const agent = row.entry.agent;
+  const resumable = agent.persistence !== null;
+
+  async function resume(event: React.MouseEvent) {
+    event.stopPropagation();
+    setPending(true);
+    try {
+      await onResume();
+    } catch (error) {
+      window.alert(
+        t("agents.actionFailed", {
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="dashboard-list-row group w-full text-left opacity-75">
+      <Archive size={15} className="shrink-0 text-[var(--foreground-faint)]" />
+      <div className="dashboard-row-copy">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="dashboard-row-title">{agent.title ?? t("workspace.untitledAgent")}</span>
+          <span className="text-[13px] text-[var(--foreground-subtle)]">{agent.provider}</span>
+        </div>
+        <div className="dashboard-row-description">
+          {row.hostLabel} · <span className="font-mono">{agent.cwd}</span>
+        </div>
+      </div>
+      <span className="dashboard-meta shrink-0">
+        {formatRelativeTime(agent.archivedAt ?? agent.updatedAt, i18n.language)}
+      </span>
+      {resumable && (
+        <div className="ml-1 hidden items-center gap-1 group-hover:flex">
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            title={t("agents.resume")}
+            disabled={pending}
+            onClick={(event) => void resume(event)}
+          >
+            <ArchiveRestore size={14} />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface AgentGroup {
   key: "today" | "yesterday" | "earlier";
   rows: AgentListRow[];
@@ -157,9 +213,11 @@ export function AgentsPage({
   onSelectAgent,
   onCancelAgent,
   onArchiveAgent,
+  onResumeAgent,
 }: AgentsPageProps) {
   const { t } = useTranslation();
   const rows = useMemo(() => buildAgentRows(hosts, runtimes), [hosts, runtimes]);
+  const archivedRows = useMemo(() => buildArchivedAgentRows(hosts, runtimes), [hosts, runtimes]);
   const groups = useMemo(() => groupRows(rows), [rows]);
   const running = rows.filter((row) => sessionStatus(row.entry.agent.status) === "running").length;
   useReveal([rows.length]);
@@ -200,6 +258,20 @@ export function AgentsPage({
               </div>
             </div>
           ))}
+          {archivedRows.length > 0 && (
+            <div className={rows.length > 0 ? "mt-8" : undefined}>
+              <SectionLabel>{t("agents.archived")}</SectionLabel>
+              <div>
+                {archivedRows.map((row) => (
+                  <ArchivedAgentRow
+                    key={`${row.hostId}-${row.entry.agent.id}`}
+                    row={row}
+                    onResume={() => onResumeAgent(row.hostId, row.entry.agent.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>

@@ -226,6 +226,16 @@ class RuntimeClient implements DaemonClientLike, DaemonDataClient {
   readonly cancelAgent = vi.fn(async (_agentId: string) => undefined);
   readonly setAgentTimelineSubscription = vi.fn(async (_agentIds: string[]) => undefined);
   readonly fetchAgentTimeline = vi.fn(async (agentId: string) => timelinePage(agentId));
+  readonly sendAgentMessage = vi.fn(async (_agentId: string, _text: string) => undefined);
+  readonly createAgent = vi.fn(async () => ({
+    ...agentEntry(this.hostId).agent,
+    id: `created-${this.hostId}`,
+  })) as unknown as DaemonClientLike["createAgent"];
+  readonly resumeAgent = vi.fn(async () => ({
+    ...agentEntry(this.hostId).agent,
+    archivedAt: null,
+  })) as unknown as DaemonClientLike["resumeAgent"];
+  readonly respondToPermission = vi.fn(async () => undefined);
 
   listTerminals(): never {
     throw new Error("not implemented in fake");
@@ -429,6 +439,90 @@ describe("dashboard Paseo runtime", () => {
     await runtime.cancelAgent("host-a", "agent-host-a");
 
     expect(clients.get("host-a")?.cancelAgent).toHaveBeenCalledWith("agent-host-a");
+  });
+
+  test("sendAgentMessage forwards to the daemon client", async () => {
+    const { clients, runtime } = createRuntimeWithClients();
+    await runtime.connectHost(makeHost("host-a"));
+
+    await runtime.sendAgentMessage("host-a", "agent-host-a", "hello");
+
+    expect(clients.get("host-a")?.sendAgentMessage).toHaveBeenCalledWith("agent-host-a", "hello");
+  });
+
+  test("createAgent forwards options and returns the snapshot", async () => {
+    const { clients, runtime } = createRuntimeWithClients();
+    await runtime.connectHost(makeHost("host-a"));
+
+    const agent = await runtime.createAgent("host-a", {
+      provider: "codex",
+      cwd: "/projects/host-a",
+      initialPrompt: "do the thing",
+    });
+
+    expect(clients.get("host-a")?.createAgent).toHaveBeenCalledWith({
+      provider: "codex",
+      cwd: "/projects/host-a",
+      initialPrompt: "do the thing",
+    });
+    expect(agent.id).toBe("created-host-a");
+  });
+
+  test("resumeAgent uses the persistence handle and clears archivedAt locally", async () => {
+    const handle = { provider: "codex" as const, sessionId: "sess-1" };
+    const { clients, runtime } = createRuntimeWithClients((hostId, config) => {
+      const client = new RuntimeClient(hostId, config);
+      client.fetchAgents.mockImplementation(async () => {
+        const result = agentResult(hostId);
+        result.entries[0].agent.persistence = handle;
+        result.entries[0].agent.archivedAt = "2026-08-13T00:00:00.000Z";
+        return result;
+      });
+      return client;
+    });
+    await runtime.connectHost(makeHost("host-a"));
+
+    await runtime.resumeAgent("host-a", "agent-host-a");
+
+    expect(clients.get("host-a")?.resumeAgent).toHaveBeenCalledWith(handle);
+    expect(runtime.get("host-a").daemonData?.agents.data[0]?.agent.archivedAt).toBeNull();
+  });
+
+  test("resumeAgent rejects when the agent has no persistence handle", async () => {
+    const { runtime } = createRuntimeWithClients();
+    await runtime.connectHost(makeHost("host-a"));
+
+    await expect(runtime.resumeAgent("host-a", "agent-host-a")).rejects.toThrow(
+      "no persistence handle",
+    );
+  });
+
+  test("respondToPermission forwards the response and clears the request locally", async () => {
+    const permission = {
+      id: "perm-1",
+      provider: "codex" as const,
+      name: "shell",
+      kind: "tool" as const,
+    };
+    const { clients, runtime } = createRuntimeWithClients((hostId, config) => {
+      const client = new RuntimeClient(hostId, config);
+      client.fetchAgents.mockImplementation(async () => {
+        const result = agentResult(hostId);
+        result.entries[0].agent.pendingPermissions = [permission];
+        return result;
+      });
+      return client;
+    });
+    await runtime.connectHost(makeHost("host-a"));
+
+    await runtime.respondToPermission("host-a", "agent-host-a", "perm-1", { behavior: "allow" });
+
+    expect(clients.get("host-a")?.respondToPermission).toHaveBeenCalledWith(
+      "agent-host-a",
+      "perm-1",
+      { behavior: "allow" },
+    );
+    expect(runtime.get("host-a").daemonData?.agents.data[0]?.agent.pendingPermissions).toEqual([]);
   });
 
   test("viewAgent subscribes the selective stream and loads the timeline tail", async () => {

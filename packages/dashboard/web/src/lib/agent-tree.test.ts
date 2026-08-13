@@ -9,6 +9,7 @@ import {
 } from "../stores/daemon-data-store";
 import {
   buildAgentRows,
+  buildArchivedAgentRows,
   buildHostNode,
   buildHostNodes,
   findAgentContext,
@@ -253,6 +254,36 @@ describe("buildAgentRows and findAgentContext", () => {
     expect(findAgentContext(hosts, runtimes, "h1", "a1")?.entry.agent.id).toBe("a1");
     expect(findAgentContext(hosts, runtimes, "h1", "missing")).toBeNull();
     expect(findAgentContext(hosts, runtimes, "missing", "a1")).toBeNull();
+  });
+
+  it("collects only archived agents sorted by archive time", () => {
+    const hosts = [makeHost("h1", "A")];
+    const runtimes = new Map([
+      [
+        "h1",
+        makeRuntime({
+          agents: [
+            makeAgentEntry({ id: "active", projectKey: "p", projectName: "p" }),
+            makeAgentEntry({
+              id: "older",
+              projectKey: "p",
+              projectName: "p",
+              archivedAt: "2026-08-10T00:00:00Z",
+            }),
+            makeAgentEntry({
+              id: "newer",
+              projectKey: "p",
+              projectName: "p",
+              archivedAt: "2026-08-12T00:00:00Z",
+            }),
+          ],
+        }),
+      ],
+    ]);
+
+    const rows = buildArchivedAgentRows(hosts, runtimes);
+
+    expect(rows.map((row) => row.entry.agent.id)).toEqual(["newer", "older"]);
   });
 
   it("orders hosts by label in the sidebar tree", () => {
