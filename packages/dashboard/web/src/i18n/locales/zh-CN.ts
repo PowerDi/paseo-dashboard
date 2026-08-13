@@ -2,6 +2,8 @@ export default {
   common: {
     loading: "加载中…",
     retry: "重试",
+    errorTitle: "出错了",
+    ok: "知道了",
   },
   login: {
     title: "登录 Paseo Dashboard",
@@ -59,6 +61,8 @@ export default {
       loadFailed: "时间线加载失败：{{message}}",
       reasoning: "思考过程",
       compaction: "上下文已压缩",
+      codeCopy: "复制代码",
+      codeCopied: "已复制",
     },
     view: {
       timeline: "时间线",

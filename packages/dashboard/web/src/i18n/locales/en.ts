@@ -4,6 +4,8 @@ const en: typeof zhCN = {
   common: {
     loading: "Loading…",
     retry: "Retry",
+    errorTitle: "Something went wrong",
+    ok: "Got it",
   },
   login: {
     title: "Sign in to Paseo Dashboard",
@@ -61,6 +63,8 @@ const en: typeof zhCN = {
       loadFailed: "Failed to load the timeline: {{message}}",
       reasoning: "Reasoning",
       compaction: "Context compacted",
+      codeCopy: "Copy code",
+      codeCopied: "Copied",
     },
     view: {
       timeline: "Timeline",

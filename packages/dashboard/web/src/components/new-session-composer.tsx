@@ -1,8 +1,16 @@
 import type { Host } from "@getpaseo/dashboard-shared";
 import { AGENT_PROVIDER_DEFINITIONS } from "@getpaseo/protocol/provider-manifest";
-import { ArrowUp, LoaderCircle } from "lucide-react";
+import { ArrowUp, Folder, LoaderCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useAutosizeTextarea } from "@/hooks/use-autosize-textarea";
 import type { DashboardHostRuntimeState } from "@/paseo/dashboardRuntime";
 import { dashboardRuntime } from "@/paseo/dashboardRuntime";
 
@@ -23,14 +31,15 @@ const PROVIDERS = AGENT_PROVIDER_DEFINITIONS.filter(
   (definition) => definition.enabledByDefault !== false,
 );
 
-const SELECT_CLASS =
-  "h-7 max-w-56 truncate rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-soft)] px-2 text-[12px] text-[var(--foreground-muted)] outline-none focus:border-[var(--border)]";
+const TRIGGER_CLASS =
+  "h-7 gap-1.5 border-[var(--border-subtle)] bg-[var(--surface-soft)] px-2 text-[12px] text-[var(--foreground-muted)] shadow-none";
 
 export function NewSessionComposer({ hosts, runtimes, onCreated }: NewSessionComposerProps) {
   const { t } = useTranslation();
   const [projectKey, setProjectKey] = useState("");
   const [provider, setProvider] = useState(PROVIDERS[0]?.id ?? "claude");
   const [prompt, setPrompt] = useState("");
+  const promptRef = useAutosizeTextarea(prompt);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,35 +86,43 @@ export function NewSessionComposer({ hosts, runtimes, onCreated }: NewSessionCom
   return (
     <footer className="workspace-composer" aria-label={t("workspace.composerAria")}>
       <div className="flex items-center gap-2">
-        <select
-          className={SELECT_CLASS}
-          aria-label={t("workspace.newSession.projectAria")}
+        <Select
           value={selectedProject?.key ?? ""}
           disabled={projectOptions.length === 0 || creating}
-          onChange={(event) => setProjectKey(event.target.value)}
+          onValueChange={setProjectKey}
         >
-          {projectOptions.length === 0 && (
-            <option value="">{t("workspace.newSession.noProjects")}</option>
-          )}
-          {projectOptions.map((option) => (
-            <option key={option.key} value={option.key}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <select
-          className={SELECT_CLASS}
-          aria-label={t("workspace.newSession.providerAria")}
-          value={provider}
-          disabled={creating}
-          onChange={(event) => setProvider(event.target.value)}
-        >
-          {PROVIDERS.map((definition) => (
-            <option key={definition.id} value={definition.id}>
-              {definition.label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger
+            size="sm"
+            className={`${TRIGGER_CLASS} max-w-64`}
+            aria-label={t("workspace.newSession.projectAria")}
+          >
+            <Folder size={13} className="shrink-0 opacity-70" />
+            <SelectValue placeholder={t("workspace.newSession.noProjects")} />
+          </SelectTrigger>
+          <SelectContent position="popper" align="start" side="top" sideOffset={6}>
+            {projectOptions.map((option) => (
+              <SelectItem key={option.key} value={option.key}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={provider} disabled={creating} onValueChange={setProvider}>
+          <SelectTrigger
+            size="sm"
+            className={TRIGGER_CLASS}
+            aria-label={t("workspace.newSession.providerAria")}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent position="popper" align="start" side="top" sideOffset={6}>
+            {PROVIDERS.map((definition) => (
+              <SelectItem key={definition.id} value={definition.id}>
+                {definition.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {error && (
           <span className="truncate text-[12px] text-[var(--danger)]" role="alert">
             {error}
@@ -114,6 +131,7 @@ export function NewSessionComposer({ hosts, runtimes, onCreated }: NewSessionCom
       </div>
       <div className="workspace-composer-input">
         <textarea
+          ref={promptRef}
           aria-label={t("workspace.messageInputAria")}
           placeholder={t("workspace.newSession.promptPlaceholder")}
           value={prompt}

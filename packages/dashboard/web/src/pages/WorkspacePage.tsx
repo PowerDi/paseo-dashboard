@@ -13,12 +13,14 @@ import {
 import type { Host } from "@getpaseo/dashboard-shared";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useErrorAlert } from "@/components/error-alert";
 import { NewSessionComposer } from "@/components/new-session-composer";
 import { PermissionRequests } from "@/components/permission-requests";
 import { TimelineView } from "@/components/timeline";
 import { WorkspaceTerminal } from "@/components/workspace-terminal";
 import { Button } from "@/components/ui/button";
 import { useAgentTimeline } from "@/hooks/use-agent-timeline";
+import { useAutosizeTextarea } from "@/hooks/use-autosize-textarea";
 import type { AgentContext } from "@/lib/agent-tree";
 import { sessionStatus } from "@/lib/agent-tree";
 import { formatDateTime } from "@/lib/format-time";
@@ -62,7 +64,9 @@ export function WorkspacePage({
   onArchiveAgent,
 }: WorkspacePageProps) {
   const { t, i18n } = useTranslation();
+  const showError = useErrorAlert();
   const [draft, setDraft] = useState("");
+  const draftRef = useAutosizeTextarea(draft);
   const [sending, setSending] = useState(false);
   const [pending, setPending] = useState<"cancel" | "archive" | null>(null);
   const [view, setView] = useState<"timeline" | "terminal">("timeline");
@@ -102,7 +106,7 @@ export function WorkspacePage({
       await dashboardRuntime.sendAgentMessage(hostId, agentId, text);
       setDraft("");
     } catch (error) {
-      window.alert(
+      showError(
         t("workspace.sendFailed", {
           message: error instanceof Error ? error.message : String(error),
         }),
@@ -118,7 +122,7 @@ export function WorkspacePage({
       try {
         await action();
       } catch (error) {
-        window.alert(
+        showError(
           t("agents.actionFailed", {
             message: error instanceof Error ? error.message : String(error),
           }),
@@ -291,6 +295,7 @@ export function WorkspacePage({
           </div>
           <div className="workspace-composer-input">
             <textarea
+              ref={draftRef}
               aria-label={t("workspace.messageInputAria")}
               placeholder={t("workspace.composerPlaceholder")}
               value={draft}

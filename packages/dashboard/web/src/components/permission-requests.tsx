@@ -5,6 +5,7 @@ import type {
 import { ShieldQuestion } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useErrorAlert } from "@/components/error-alert";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,7 @@ function PermissionCard({
   onRespond: PermissionRequestsProps["onRespond"];
 }) {
   const { t } = useTranslation();
+  const showError = useErrorAlert();
   const [pending, setPending] = useState(false);
 
   async function respond(response: AgentPermissionResponse) {
@@ -34,7 +36,7 @@ function PermissionCard({
     try {
       await onRespond(request.id, response);
     } catch (error) {
-      window.alert(
+      showError(
         t("workspace.permissions.respondFailed", {
           message: error instanceof Error ? error.message : String(error),
         }),

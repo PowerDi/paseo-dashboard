@@ -3,6 +3,7 @@ import { LoaderCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { dashboardApi, deleteHost } from "./api/dashboardApi";
+import { ErrorAlertProvider } from "./components/error-alert";
 import { useHostRuntimes } from "./hooks/use-host-runtimes";
 import { Shell, type Page } from "./layouts/Shell";
 import { buildHostNodes, findAgentContext } from "./lib/agent-tree";
@@ -65,7 +66,11 @@ export function App() {
     );
   }
 
-  return <AuthenticatedApp />;
+  return (
+    <ErrorAlertProvider>
+      <AuthenticatedApp />
+    </ErrorAlertProvider>
+  );
 }
 
 function AuthenticatedApp() {

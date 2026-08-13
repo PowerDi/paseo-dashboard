@@ -1,6 +1,8 @@
 import type { AgentTimelineItem, ToolCallDetail } from "@getpaseo/protocol/agent-types";
 import { Check, ChevronUp, Circle, LoaderCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { CodeBlock } from "@/components/code-block";
+import { MarkdownContent } from "@/components/markdown-content";
 import { Button } from "@/components/ui/button";
 import type { AgentTimelineState, TimelineEntry } from "@/stores/timeline-store";
 import { cn } from "@/lib/utils";
@@ -73,9 +75,9 @@ function ToolCallRow({ item }: { item: Extract<AgentTimelineItem, { type: "tool_
       <summary className="flex cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden">
         {head}
       </summary>
-      <pre className="mt-1.5 max-h-64 overflow-auto rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-inset)] p-2.5 font-mono text-xs leading-relaxed text-[var(--foreground-muted)]">
-        {body}
-      </pre>
+      <div className="mt-1.5">
+        <CodeBlock code={body} language={item.detail.type === "edit" ? "diff" : undefined} />
+      </div>
     </details>
   );
 }
@@ -92,11 +94,7 @@ function TimelineItemView({ entry }: { entry: TimelineEntry }) {
         </div>
       );
     case "assistant_message":
-      return (
-        <div className="px-0.5 text-[14px] leading-relaxed text-[var(--foreground-muted)] whitespace-pre-wrap break-words">
-          {item.text}
-        </div>
-      );
+      return <MarkdownContent>{item.text}</MarkdownContent>;
     case "reasoning":
       return (
         <details className="px-0.5">

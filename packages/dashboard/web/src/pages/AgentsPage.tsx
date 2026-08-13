@@ -2,6 +2,7 @@ import type { Host } from "@getpaseo/dashboard-shared";
 import { Archive, ArchiveRestore, Bot, Square } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useErrorAlert } from "@/components/error-alert";
 import { SectionLabel } from "@/components/section-label";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +47,7 @@ function AgentRow({
   onArchive: () => Promise<void>;
 }) {
   const { t, i18n } = useTranslation();
+  const showError = useErrorAlert();
   const [pending, setPending] = useState<"cancel" | "archive" | null>(null);
   const agent = row.entry.agent;
   const status = sessionStatus(agent.status);
@@ -58,7 +60,7 @@ function AgentRow({
       try {
         await action();
       } catch (error) {
-        window.alert(
+        showError(
           t("agents.actionFailed", {
             message: error instanceof Error ? error.message : String(error),
           }),
@@ -131,6 +133,7 @@ function AgentRow({
 
 function ArchivedAgentRow({ row, onResume }: { row: AgentListRow; onResume: () => Promise<void> }) {
   const { t, i18n } = useTranslation();
+  const showError = useErrorAlert();
   const [pending, setPending] = useState(false);
   const agent = row.entry.agent;
   const resumable = agent.persistence !== null;
@@ -141,7 +144,7 @@ function ArchivedAgentRow({ row, onResume }: { row: AgentListRow; onResume: () =
     try {
       await onResume();
     } catch (error) {
-      window.alert(
+      showError(
         t("agents.actionFailed", {
           message: error instanceof Error ? error.message : String(error),
         }),
