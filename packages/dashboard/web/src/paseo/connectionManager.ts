@@ -3,11 +3,11 @@ import {
   type ConnectionState,
   type DaemonClientConfig,
 } from "@getpaseo/client/internal/daemon-client";
+import type { Host } from "@getpaseo/dashboard-shared";
 import {
   buildRelayWebSocketUrl,
   shouldUseTlsForDefaultHostedRelay,
 } from "@getpaseo/protocol/daemon-endpoints";
-import type { Host } from "@getpaseo/dashboard-shared";
 
 export type HostConnectionState = ConnectionState;
 export type DaemonClientLike = Pick<
@@ -17,93 +17,221 @@ export type DaemonClientLike = Pick<
   | "getConnectionState"
   | "subscribeConnectionStatus"
   | "getLastServerInfoMessage"
+  | "on"
+  | "archiveAgent"
+  | "cancelAgent"
+  | "fetchAgentTimeline"
+  | "setAgentTimelineSubscription"
 >;
 export type DaemonClientFactory = (config: DaemonClientConfig) => DaemonClientLike;
 export type PaseoConnectionListener = (state: HostConnectionState) => void;
 
 interface ManagedConnection {
   client: DaemonClientLike;
-  state: HostConnectionState;
+  connectPromise: Promise<void> | null;
+  rejectPendingConnect: ((error: Error) => void) | null;
+  detached: boolean;
   unsubscribeClient: () => void;
+}
+
+interface HostConnectionSlot {
+  connection: ManagedConnection | null;
   listeners: Set<PaseoConnectionListener>;
+  state: HostConnectionState;
 }
 
 export interface PaseoConnectionManager {
   connect(host: Host): Promise<void>;
   disconnect(hostId: string): Promise<void>;
+  disconnectAll(): Promise<void>;
   getState(hostId: string): HostConnectionState;
   subscribe(hostId: string, listener: PaseoConnectionListener): () => void;
   getDaemonClient(hostId: string): DaemonClientLike | null;
 }
 
 export class DefaultPaseoConnectionManager implements PaseoConnectionManager {
-  private readonly connections = new Map<string, ManagedConnection>();
+  private readonly slots = new Map<string, HostConnectionSlot>();
 
   constructor(
     private readonly createClient: DaemonClientFactory = (config) => new DaemonClient(config),
   ) {}
 
   async connect(host: Host): Promise<void> {
-    const existing = this.connections.get(host.id);
-    if (existing && existing.state.status !== "disposed") {
-      await existing.client.connect();
-      return;
+    const slot = this.getOrCreateSlot(host.id);
+    const existing = slot.connection;
+
+    if (existing) {
+      if (slot.state.status === "connected") return;
+      if (existing.connectPromise) return existing.connectPromise;
+      if (slot.state.status === "connecting") return;
+
+      if (slot.state.status !== "disposed") {
+        return this.startConnect(host.id, slot, existing);
+      }
+
+      this.detachConnection(host.id, slot, existing, { status: "idle" });
     }
 
-    const client = this.createClient(createClientConfig(host));
-    const managed: ManagedConnection = {
+    let client: DaemonClientLike;
+    try {
+      client = this.createClient(createClientConfig(host));
+    } catch (error) {
+      this.deleteUnusedSlot(host.id, slot);
+      throw error;
+    }
+
+    const connection: ManagedConnection = {
       client,
-      state: client.getConnectionState(),
+      connectPromise: null,
+      rejectPendingConnect: null,
+      detached: false,
       unsubscribeClient: () => undefined,
-      listeners: new Set(),
     };
-
-    managed.unsubscribeClient = client.subscribeConnectionStatus((state) => {
-      managed.state = state;
-      for (const listener of managed.listeners) {
-        listener(state);
-      }
-    });
-
-    this.connections.set(host.id, managed);
+    slot.connection = connection;
 
     try {
-      await client.connect();
+      connection.unsubscribeClient = client.subscribeConnectionStatus((state) => {
+        if (slot.connection !== connection || connection.detached) return;
+        this.updateState(slot, state);
+      });
     } catch (error) {
+      this.detachConnection(host.id, slot, connection, { status: "idle" });
       await client.close().catch(() => undefined);
       throw error;
     }
+
+    return this.startConnect(host.id, slot, connection);
   }
 
   async disconnect(hostId: string): Promise<void> {
-    const managed = this.connections.get(hostId);
-    if (!managed) return;
-    managed.unsubscribeClient();
-    await managed.client.close();
-    this.connections.delete(hostId);
+    const slot = this.slots.get(hostId);
+    const connection = slot?.connection;
+    if (!slot || !connection) return;
+
+    this.detachConnection(hostId, slot, connection, { status: "idle" });
+    connection.rejectPendingConnect?.(new Error(`Connection closed for host ${hostId}`));
+    await connection.client.close();
+  }
+
+  async disconnectAll(): Promise<void> {
+    const hostIds = [...this.slots.entries()]
+      .filter(([, slot]) => slot.connection !== null)
+      .map(([hostId]) => hostId);
+    const results = await Promise.allSettled(hostIds.map((hostId) => this.disconnect(hostId)));
+    const errors = results
+      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+      .map((result) => result.reason);
+
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1) throw new AggregateError(errors, "Failed to close Paseo connections");
   }
 
   getState(hostId: string): HostConnectionState {
-    return this.connections.get(hostId)?.state ?? { status: "idle" };
+    return this.slots.get(hostId)?.state ?? { status: "idle" };
   }
 
   subscribe(hostId: string, listener: PaseoConnectionListener): () => void {
-    const managed = this.connections.get(hostId);
-    if (!managed) {
-      listener({ status: "idle" });
-      return () => undefined;
-    }
+    const slot = this.getOrCreateSlot(hostId);
+    slot.listeners.add(listener);
+    listener(slot.state);
 
-    managed.listeners.add(listener);
-    listener(managed.state);
     return () => {
-      managed.listeners.delete(listener);
+      slot.listeners.delete(listener);
+      this.deleteUnusedSlot(hostId, slot);
     };
   }
 
   getDaemonClient(hostId: string): DaemonClientLike | null {
-    return this.connections.get(hostId)?.client ?? null;
+    return this.slots.get(hostId)?.connection?.client ?? null;
   }
+
+  private getOrCreateSlot(hostId: string): HostConnectionSlot {
+    const existing = this.slots.get(hostId);
+    if (existing) return existing;
+
+    const slot: HostConnectionSlot = {
+      connection: null,
+      listeners: new Set(),
+      state: { status: "idle" },
+    };
+    this.slots.set(hostId, slot);
+    return slot;
+  }
+
+  private startConnect(
+    hostId: string,
+    slot: HostConnectionSlot,
+    connection: ManagedConnection,
+  ): Promise<void> {
+    let clientPromise: Promise<void>;
+    try {
+      clientPromise = connection.client.connect();
+    } catch (error) {
+      clientPromise = Promise.reject(error);
+    }
+
+    const guardedClientPromise = new Promise<void>((resolve, reject) => {
+      connection.rejectPendingConnect = reject;
+      void clientPromise.then(resolve, reject);
+    });
+    const connectPromise = guardedClientPromise
+      .catch(async (error) => {
+        if (this.detachConnection(hostId, slot, connection, { status: "idle" })) {
+          await connection.client.close().catch(() => undefined);
+        }
+        throw error;
+      })
+      .finally(() => {
+        if (connection.connectPromise === connectPromise) {
+          connection.connectPromise = null;
+          connection.rejectPendingConnect = null;
+        }
+      });
+    connection.connectPromise = connectPromise;
+    return connectPromise;
+  }
+
+  private detachConnection(
+    hostId: string,
+    slot: HostConnectionSlot,
+    connection: ManagedConnection,
+    nextState: HostConnectionState,
+  ): boolean {
+    if (slot.connection !== connection || connection.detached) return false;
+
+    connection.detached = true;
+    connection.unsubscribeClient();
+    slot.connection = null;
+    this.updateState(slot, nextState);
+    this.deleteUnusedSlot(hostId, slot);
+    return true;
+  }
+
+  private updateState(slot: HostConnectionSlot, state: HostConnectionState): void {
+    if (connectionStatesEqual(slot.state, state)) return;
+
+    slot.state = state;
+    for (const listener of slot.listeners) {
+      listener(state);
+    }
+  }
+
+  private deleteUnusedSlot(hostId: string, slot: HostConnectionSlot): void {
+    if (slot.connection === null && slot.listeners.size === 0 && this.slots.get(hostId) === slot) {
+      this.slots.delete(hostId);
+    }
+  }
+}
+
+function connectionStatesEqual(left: ConnectionState, right: ConnectionState): boolean {
+  if (left.status !== right.status) return false;
+  if (left.status === "connecting" && right.status === "connecting") {
+    return left.attempt === right.attempt;
+  }
+  if (left.status === "disconnected" && right.status === "disconnected") {
+    return left.reason === right.reason;
+  }
+  return true;
 }
 
 export function createClientConfig(host: Host): DaemonClientConfig {

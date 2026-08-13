@@ -1,228 +1,218 @@
-import { useEffect, useMemo, useState } from "react";
-import type { Host, HostConnection } from "@getpaseo/dashboard-shared";
-import { importHost, listHosts, login, register, syncHosts } from "./api/dashboardApi";
-import { DefaultPaseoConnectionManager } from "./paseo/connectionManager";
-import { clearOfferFragmentFromLocation, parseAndNormalizeOffer } from "./paseo/offer";
-import { createClientConfig } from "./paseo/connectionManager";
+import type { Host } from "@getpaseo/dashboard-shared";
+import { LoaderCircle } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { dashboardApi, deleteHost } from "./api/dashboardApi";
+import { useHostRuntimes } from "./hooks/use-host-runtimes";
+import { Shell, type Page } from "./layouts/Shell";
+import { buildHostNodes, findAgentContext } from "./lib/agent-tree";
+import { AgentsPage } from "./pages/AgentsPage";
+import { DevicesPage } from "./pages/DevicesPage";
+import { HostsPage } from "./pages/HostsPage";
+import { ImportHostModal } from "./pages/ImportHostModal";
+import { LoginPage } from "./pages/LoginPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { WorkspacePage } from "./pages/WorkspacePage";
+import { dashboardRuntime } from "./paseo/dashboardRuntime";
+import { useAppStore } from "./stores/app-store";
+import { useHostSyncStore } from "./stores/host-sync-store";
+import { Button } from "./components/ui/button";
 
-const installationKey = "paseo-board.installation-id";
+const MODAL_CLOSE_MS = 180;
 
-function getInstallationId(): string {
-  const existing = globalThis.localStorage?.getItem(installationKey);
-  if (existing) return existing;
-  const next = globalThis.crypto.randomUUID();
-  globalThis.localStorage?.setItem(installationKey, next);
-  return next;
+interface AgentSelection {
+  hostId: string;
+  agentId: string;
+}
+
+function CenteredScreen({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[var(--background)] p-4">
+      {children}
+    </div>
+  );
 }
 
 export function App() {
-  const manager = useMemo(() => new DefaultPaseoConnectionManager(), []);
-  // Expose for E2E test access
-  if (typeof globalThis !== "undefined" && process.env.NODE_ENV !== "production") {
-    (globalThis as Record<string, unknown>).__paseoTestConnectionManager = { createClientConfig };
-  }
-  const [email, setEmail] = useState("user@example.com");
-  const [password, setPassword] = useState("password123");
-  const [label, setLabel] = useState("My Paseo Host");
-  const [offerInput, setOfferInput] = useState("");
-  const [connection, setConnection] = useState<HostConnection | null>(null);
-  const [hosts, setHosts] = useState<Host[]>([]);
-  const [syncRevision, setSyncRevision] = useState(0);
-  const [selectedHostId, setSelectedHostId] = useState<string | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState("idle");
-  const [message, setMessage] = useState("");
+  const status = useAppStore((state) => state.status);
+  const bootstrapError = useAppStore((state) => state.bootstrapError);
+  const { t } = useTranslation();
 
   useEffect(() => {
-    try {
-      const normalized = parseAndNormalizeOffer(globalThis.location.href);
-      setOfferInput(globalThis.location.href);
-      setConnection(normalized.connection);
-      clearOfferFragmentFromLocation();
-    } catch {
-      clearOfferFragmentFromLocation();
-    }
+    void useAppStore.getState().bootstrap();
   }, []);
 
-  async function authenticate(mode: "login" | "register") {
-    setMessage("");
-    const device = {
-      installationId: getInstallationId(),
-      name: navigator.userAgent.slice(0, 80),
-      platform: "web" as const,
-    };
-    const payload = { email, password, device };
-    await (mode === "login" ? login(payload) : register(payload));
-    const nextHosts = await listHosts();
-    setHosts(nextHosts);
-    setSelectedHostId(nextHosts[0]?.id ?? null);
-    setMessage(`${mode === "login" ? "登录" : "注册"}成功，已加载 Host`);
+  if (status === "checking") {
+    return (
+      <CenteredScreen>
+        <LoaderCircle className="animate-spin text-[var(--foreground-faint)]" size={20} />
+      </CenteredScreen>
+    );
   }
 
-  async function parseOffer() {
-    setMessage("");
-    const normalized = parseAndNormalizeOffer(offerInput);
-    setConnection(normalized.connection);
-    setMessage("pairing offer 格式有效，可继续连接验证");
+  if (status === "unauthenticated") {
+    return <LoginPage />;
   }
 
-  async function verifyAndImport() {
-    if (!connection) return;
-    setMessage("");
-    const provisionalHost: Host = {
-      id: `pending-${connection.serverId}`,
-      label,
-      version: 0,
-      connection,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+  if (status === "error") {
+    return (
+      <CenteredScreen>
+        <p className="text-[13px] text-[var(--danger)]">{bootstrapError}</p>
+        <Button size="sm" variant="outline" onClick={() => void useAppStore.getState().bootstrap()}>
+          {t("common.retry")}
+        </Button>
+      </CenteredScreen>
+    );
+  }
 
-    await manager.connect(provisionalHost);
-    const client = manager.getDaemonClient(provisionalHost.id);
-    const serverInfo = client?.getLastServerInfoMessage();
-    if (!serverInfo || serverInfo.serverId !== connection.serverId) {
-      await manager.disconnect(provisionalHost.id);
-      throw new Error("daemon server_info 与 pairing offer 不匹配");
+  return <AuthenticatedApp />;
+}
+
+function AuthenticatedApp() {
+  const [page, setPage] = useState<Page>("workspace");
+  const [showImport, setShowImport] = useState(false);
+  const [importClosing, setImportClosing] = useState(false);
+  const importCloseTimer = useRef<number | null>(null);
+  const [selection, setSelection] = useState<AgentSelection | null>(null);
+
+  const hostsMap = useHostSyncStore((state) => state.hosts);
+  const hosts = useMemo(() => [...hostsMap.values()], [hostsMap]);
+  const runtimes = useHostRuntimes(hosts);
+  const hostNodes = useMemo(() => buildHostNodes(hosts, runtimes), [hosts, runtimes]);
+  const selectedContext = selection
+    ? findAgentContext(hosts, runtimes, selection.hostId, selection.agentId)
+    : null;
+
+  // Connect every known host; disconnect hosts that left the registry.
+  const connectedIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const currentIds = new Set(hosts.map((host) => host.id));
+    for (const host of hosts) {
+      if (connectedIdsRef.current.has(host.id)) continue;
+      connectedIdsRef.current.add(host.id);
+      void dashboardRuntime.connectHost(host).catch(() => {
+        // Connection state is surfaced through the runtime subscription.
+      });
     }
-
-    const result = await importHost({
-      label,
-      connection,
-      clientVerification: {
-        verifiedAt: new Date().toISOString(),
-        serverVersion: serverInfo.version ?? "unknown",
-      },
-      idempotencyKey: globalThis.crypto.randomUUID(),
-    });
-
-    await manager.disconnect(provisionalHost.id);
-    setHosts((current) => [result.host, ...current.filter((host) => host.id !== result.host.id)]);
-    setSelectedHostId(result.host.id);
-    setSyncRevision(result.syncRevision);
-    setMessage("Host 已验证并导入 Dashboard");
-  }
-
-  async function sync() {
-    setMessage("");
-    const result = await syncHosts(syncRevision);
-    const upserts = result.changes
-      .filter((change) => change.operation === "upsert")
-      .map((change) => change.host);
-    setHosts((current) => {
-      const byId = new Map(current.map((host) => [host.id, host]));
-      for (const host of upserts) byId.set(host.id, host);
-      return Array.from(byId.values());
-    });
-    setSyncRevision(result.toRevision);
-    setSelectedHostId((current) => current ?? upserts[0]?.id ?? null);
-    setMessage("Host sync 完成");
-  }
-
-  async function connectSelectedHost() {
-    const host = hosts.find((item) => item.id === selectedHostId);
-    if (!host) return;
-    setMessage("");
-    const unsubscribe = manager.subscribe(host.id, (state) => setConnectionStatus(state.status));
-    try {
-      await manager.connect(host);
-      const serverInfo = manager.getDaemonClient(host.id)?.getLastServerInfoMessage();
-      setMessage(`daemon 已连接：${serverInfo?.version ?? "version unknown"}`);
-    } finally {
-      unsubscribe();
+    // Deleting the current entry while iterating a Set is safe.
+    for (const hostId of connectedIdsRef.current) {
+      if (currentIds.has(hostId)) continue;
+      connectedIdsRef.current.delete(hostId);
+      void dashboardRuntime.disconnectHost(hostId).catch(() => undefined);
     }
+  }, [hosts]);
+
+  useEffect(
+    () => () => {
+      connectedIdsRef.current.clear();
+      void dashboardRuntime.disconnectAll().catch(() => undefined);
+    },
+    [],
+  );
+
+  // Config events keep the host registry current across devices.
+  useEffect(() => {
+    const subscription = dashboardApi.subscribeConfigEvents((event) => {
+      if (event.type === "host.upserted" || event.type === "host.deleted") {
+        void useHostSyncStore.getState().sync();
+      }
+    });
+    return () => subscription.close();
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (importCloseTimer.current !== null) window.clearTimeout(importCloseTimer.current);
+    },
+    [],
+  );
+
+  function openImport() {
+    if (importCloseTimer.current !== null) {
+      window.clearTimeout(importCloseTimer.current);
+      importCloseTimer.current = null;
+    }
+    setImportClosing(false);
+    setShowImport(true);
   }
 
-  async function run(action: () => Promise<void>) {
-    try {
-      await action();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "操作失败");
+  function closeImport() {
+    if (importCloseTimer.current !== null) return;
+    setImportClosing(true);
+    importCloseTimer.current = window.setTimeout(() => {
+      importCloseTimer.current = null;
+      setShowImport(false);
+      setImportClosing(false);
+    }, MODAL_CLOSE_MS);
+  }
+
+  async function handleRemoveHost(host: Host) {
+    await deleteHost(host.id).catch(() => undefined);
+    await useHostSyncStore.getState().sync();
+    if (selection?.hostId === host.id) setSelection(null);
+  }
+
+  function selectAgent(hostId: string, agentId: string) {
+    setSelection({ hostId, agentId });
+    setPage("workspace");
+  }
+
+  async function cancelAgent(hostId: string, agentId: string) {
+    await dashboardRuntime.cancelAgent(hostId, agentId);
+  }
+
+  async function archiveAgent(hostId: string, agentId: string) {
+    await dashboardRuntime.archiveAgent(hostId, agentId);
+    if (selection?.hostId === hostId && selection.agentId === agentId) {
+      setSelection(null);
     }
   }
 
   return (
-    <main className="app">
-      <section className="hero">
-        <h1>Paseo Dashboard</h1>
-        <p>
-          控制面只保存和同步 Host capability；daemon 数据由浏览器直接通过 Paseo Relay/E2EE 获取。
-        </p>
-      </section>
+    <>
+      <Shell
+        page={page}
+        onPageChange={setPage}
+        onAddHost={openImport}
+        onLogout={() => void useAppStore.getState().logout()}
+        hosts={hostNodes}
+        selectedAgentId={selection?.agentId ?? null}
+        onSelectSession={(session) => selectAgent(session.hostId, session.id)}
+      >
+        <div key={page} className="dashboard-page-enter flex min-h-0 flex-1 flex-col">
+          {page === "workspace" && (
+            <WorkspacePage
+              context={selectedContext}
+              onCancelAgent={cancelAgent}
+              onArchiveAgent={archiveAgent}
+            />
+          )}
+          {page === "hosts" && (
+            <HostsPage
+              hosts={hosts}
+              runtimes={runtimes}
+              onAddHost={openImport}
+              onRemoveHost={(host) => void handleRemoveHost(host)}
+            />
+          )}
+          {page === "agents" && (
+            <AgentsPage
+              hosts={hosts}
+              runtimes={runtimes}
+              selectedAgentId={selection?.agentId ?? null}
+              onSelectAgent={selectAgent}
+              onCancelAgent={cancelAgent}
+              onArchiveAgent={archiveAgent}
+            />
+          )}
+          {page === "devices" && <DevicesPage />}
+          {page === "settings" && <SettingsPage />}
+        </div>
+      </Shell>
 
-      <section className="grid">
-        <form className="card stack" onSubmit={(event) => event.preventDefault()}>
-          <h2>账号</h2>
-          <input value={email} onChange={(event) => setEmail(event.target.value)} />
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-          <div className="row">
-            <button type="button" onClick={() => void run(() => authenticate("login"))}>
-              登录
-            </button>
-            <button type="button" onClick={() => void run(() => authenticate("register"))}>
-              注册
-            </button>
-          </div>
-        </form>
-
-        <section className="card stack">
-          <h2>导入 Host</h2>
-          <input value={label} onChange={(event) => setLabel(event.target.value)} />
-          <textarea
-            value={offerInput}
-            onChange={(event) => setOfferInput(event.target.value)}
-            placeholder="粘贴 https://app.paseo.sh/#offer=..."
-          />
-          <div className="row">
-            <button type="button" onClick={() => void run(parseOffer)}>
-              校验 offer
-            </button>
-            <button type="button" disabled={!connection} onClick={() => void run(verifyAndImport)}>
-              验证并导入
-            </button>
-          </div>
-          {connection ? (
-            <p className="muted">已解析 relay endpoint，完整 capability 不在页面日志中展示。</p>
-          ) : null}
-        </section>
-
-        <section className="card stack">
-          <h2>Host 同步与连接</h2>
-          <button type="button" onClick={() => void run(sync)}>
-            同步 Host
-          </button>
-          <div className="stack">
-            {hosts.map((host) => (
-              <label className="host row" key={host.id}>
-                <input
-                  checked={selectedHostId === host.id}
-                  name="host"
-                  onChange={() => setSelectedHostId(host.id)}
-                  type="radio"
-                />
-                <span>{host.label}</span>
-              </label>
-            ))}
-          </div>
-          <button
-            type="button"
-            disabled={!selectedHostId}
-            onClick={() => void run(connectSelectedHost)}
-          >
-            连接选中 Host
-          </button>
-          <span className="status">连接状态：{connectionStatus}</span>
-        </section>
-      </section>
-
-      {message ? (
-        <p className={message.includes("失败") || message.includes("failed") ? "error" : "success"}>
-          {message}
-        </p>
-      ) : null}
-    </main>
+      {showImport && (
+        <ImportHostModal dataState={importClosing ? "closed" : "open"} onClose={closeImport} />
+      )}
+    </>
   );
 }

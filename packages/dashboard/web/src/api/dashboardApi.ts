@@ -1,4 +1,5 @@
 import type {
+  ConfigEvent,
   Device,
   Host,
   HostImportRequest,
@@ -9,67 +10,291 @@ import type {
   Session,
   SyncResponse,
 } from "@getpaseo/dashboard-shared";
+import {
+  createConfigEventStream,
+  type ConfigEventStreamOptions,
+  type ConfigEventSubscription,
+} from "./dashboardEvents";
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-  });
+export interface DashboardApiClientOptions {
+  /** Prefix for API URLs. Relative paths are used by default. */
+  baseUrl?: string;
+  /** Optional bearer token for Harmony or a web caller using token auth. */
+  accessToken?: string;
+  fetch?: typeof globalThis.fetch;
+  credentials?: RequestCredentials;
+  onUnauthorized?: (error: DashboardApiUnauthorizedError) => void;
+}
 
-  if (!response.ok) {
-    throw new Error(`Dashboard API failed: ${response.status}`);
+export interface DashboardRequestOptions extends RequestInit {
+  /** Set false for public auth calls such as login with invalid credentials. */
+  notifyUnauthorized?: boolean;
+}
+
+export class DashboardApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly details?: Record<string, unknown>;
+
+  constructor(
+    status: number,
+    message = `Dashboard API failed: ${status}`,
+    options?: { code?: string; details?: Record<string, unknown> },
+  ) {
+    super(message);
+    this.name = "DashboardApiError";
+    this.status = status;
+    this.code = options?.code;
+    this.details = options?.details;
+  }
+}
+
+export class DashboardApiUnauthorizedError extends DashboardApiError {
+  constructor(
+    message = "Dashboard API failed: 401",
+    options?: { code?: string; details?: Record<string, unknown> },
+  ) {
+    super(401, message, options);
+    this.name = "DashboardApiUnauthorizedError";
+  }
+}
+
+export class DashboardApiClient {
+  private readonly baseUrl?: string;
+  private readonly fetchImpl: typeof globalThis.fetch;
+  private readonly credentials: RequestCredentials;
+  private accessToken?: string;
+  private onUnauthorized?: DashboardApiClientOptions["onUnauthorized"];
+
+  constructor(options: DashboardApiClientOptions = {}) {
+    this.baseUrl = options.baseUrl;
+    this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+    this.credentials = options.credentials ?? "include";
+    this.accessToken = options.accessToken;
+    this.onUnauthorized = options.onUnauthorized;
   }
 
-  return response.json() as Promise<T>;
+  setAccessToken(accessToken: string | undefined): void {
+    this.accessToken = accessToken;
+  }
+
+  clearAccessToken(): void {
+    this.accessToken = undefined;
+  }
+
+  setUnauthorizedHandler(handler: DashboardApiClientOptions["onUnauthorized"]): void {
+    this.onUnauthorized = handler;
+  }
+
+  getAccessToken(): string | undefined {
+    return this.accessToken;
+  }
+
+  async request<T>(path: string, init: DashboardRequestOptions = {}): Promise<T> {
+    const { notifyUnauthorized, ...requestInit } = init;
+    const headers = new Headers(requestInit.headers);
+    if (init.body !== undefined && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+    if (this.accessToken) headers.set("Authorization", `Bearer ${this.accessToken}`);
+
+    const response = await this.fetchImpl(this.resolveUrl(path), {
+      ...requestInit,
+      headers,
+      credentials: requestInit.credentials ?? this.credentials,
+    });
+
+    if (!response.ok) {
+      const error = await apiErrorFromResponse(response);
+      if (error.status === 401 && notifyUnauthorized !== false) {
+        this.onUnauthorized?.(error as DashboardApiUnauthorizedError);
+      }
+      throw error;
+    }
+
+    return response.json() as Promise<T>;
+  }
+
+  register(input: RegisterRequest): Promise<LoginResponse> {
+    return this.request<LoginResponse>("/api/v1/auth/register", {
+      method: "POST",
+      body: JSON.stringify(input),
+      notifyUnauthorized: false,
+    });
+  }
+
+  login(input: LoginRequest): Promise<LoginResponse> {
+    return this.request<LoginResponse>("/api/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify(input),
+      notifyUnauthorized: false,
+    });
+  }
+
+  listHosts(): Promise<Host[]> {
+    return this.request<Host[]>("/api/v1/hosts");
+  }
+
+  syncHosts(after: number, limit?: number): Promise<SyncResponse> {
+    const params = new URLSearchParams({ after: String(after) });
+    if (limit !== undefined) params.set("limit", String(limit));
+    return this.request<SyncResponse>(`/api/v1/host-sync?${params.toString()}`);
+  }
+
+  importHost(input: HostImportRequest): Promise<HostImportResponse> {
+    return this.request<HostImportResponse>("/api/v1/hosts/import", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  deleteHost(hostId: string): Promise<{ ok: boolean }> {
+    return this.request<{ ok: boolean }>(`/api/v1/hosts/${encodeURIComponent(hostId)}`, {
+      method: "DELETE",
+    });
+  }
+
+  logout(): Promise<{ ok: boolean }> {
+    return this.request<{ ok: boolean }>("/api/v1/auth/logout", {
+      method: "POST",
+      notifyUnauthorized: false,
+    });
+  }
+
+  listDevices(): Promise<Device[]> {
+    return this.request<Device[]>("/api/v1/devices");
+  }
+
+  revokeDevice(deviceId: string): Promise<{ ok: boolean }> {
+    return this.request<{ ok: boolean }>(`/api/v1/devices/${encodeURIComponent(deviceId)}`, {
+      method: "DELETE",
+    });
+  }
+
+  listSessions(): Promise<(Session & { isCurrentSession: boolean })[]> {
+    return this.request<(Session & { isCurrentSession: boolean })[]>("/api/v1/sessions");
+  }
+
+  revokeSession(sessionId: string): Promise<{ ok: boolean }> {
+    return this.request<{ ok: boolean }>(`/api/v1/sessions/${encodeURIComponent(sessionId)}`, {
+      method: "DELETE",
+    });
+  }
+
+  subscribeConfigEvents(
+    onEvent: (event: ConfigEvent) => void,
+    options: Omit<
+      ConfigEventStreamOptions,
+      "onEvent" | "accessToken" | "fetch" | "credentials" | "url"
+    > & {
+      url?: string;
+    } = {},
+  ): ConfigEventSubscription {
+    return createConfigEventStream({
+      ...options,
+      url: this.resolveUrl(options.url ?? "/api/v1/events"),
+      accessToken: this.accessToken,
+      fetch: this.fetchImpl,
+      credentials: this.credentials,
+      onUnauthorized: (error) => {
+        options.onUnauthorized?.(error);
+        this.onUnauthorized?.(new DashboardApiUnauthorizedError(error.message));
+      },
+      onEvent,
+    });
+  }
+
+  private resolveUrl(path: string): string {
+    if (!this.baseUrl) return path;
+    return new URL(path, this.baseUrl).toString();
+  }
+}
+
+export const dashboardApi = new DashboardApiClient();
+
+export function configureDashboardAuth(
+  accessToken: string | undefined,
+  onUnauthorized?: (error: DashboardApiUnauthorizedError) => void,
+): void {
+  dashboardApi.setAccessToken(accessToken);
+  dashboardApi.setUnauthorizedHandler(onUnauthorized);
 }
 
 export function register(input: RegisterRequest): Promise<LoginResponse> {
-  return request<LoginResponse>("/api/v1/auth/register", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+  return dashboardApi.register(input);
 }
 
 export function login(input: LoginRequest): Promise<LoginResponse> {
-  return request<LoginResponse>("/api/v1/auth/login", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+  return dashboardApi.login(input);
 }
 
 export function listHosts(): Promise<Host[]> {
-  return request<Host[]>("/api/v1/hosts");
+  return dashboardApi.listHosts();
 }
 
 export function syncHosts(after: number, limit?: number): Promise<SyncResponse> {
-  const params = new URLSearchParams({ after: String(after) });
-  if (limit !== undefined) params.set("limit", String(limit));
-  return request<SyncResponse>(`/api/v1/host-sync?${params.toString()}`);
+  return dashboardApi.syncHosts(after, limit);
 }
 
 export function importHost(input: HostImportRequest): Promise<HostImportResponse> {
-  return request<HostImportResponse>("/api/v1/hosts/import", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+  return dashboardApi.importHost(input);
+}
+
+export function deleteHost(hostId: string): Promise<{ ok: boolean }> {
+  return dashboardApi.deleteHost(hostId);
+}
+
+export function logout(): Promise<{ ok: boolean }> {
+  return dashboardApi.logout();
 }
 
 export function listDevices(): Promise<Device[]> {
-  return request<Device[]>("/api/v1/devices");
+  return dashboardApi.listDevices();
 }
 
 export function revokeDevice(deviceId: string): Promise<{ ok: boolean }> {
-  return request<{ ok: boolean }>(`/api/v1/devices/${deviceId}`, { method: "DELETE" });
+  return dashboardApi.revokeDevice(deviceId);
 }
 
 export function listSessions(): Promise<(Session & { isCurrentSession: boolean })[]> {
-  return request<(Session & { isCurrentSession: boolean })[]>("/api/v1/sessions");
+  return dashboardApi.listSessions();
 }
 
 export function revokeSession(sessionId: string): Promise<{ ok: boolean }> {
-  return request<{ ok: boolean }>(`/api/v1/sessions/${sessionId}`, { method: "DELETE" });
+  return dashboardApi.revokeSession(sessionId);
+}
+
+export function subscribeConfigEvents(
+  onEvent: (event: ConfigEvent) => void,
+  options: Omit<
+    ConfigEventStreamOptions,
+    "onEvent" | "accessToken" | "fetch" | "credentials" | "url"
+  > & {
+    url?: string;
+  } = {},
+): ConfigEventSubscription {
+  return dashboardApi.subscribeConfigEvents(onEvent, options);
+}
+
+async function apiErrorFromResponse(response: Response): Promise<DashboardApiError> {
+  let message = `Dashboard API failed: ${response.status}`;
+  let code: string | undefined;
+  let details: Record<string, unknown> | undefined;
+
+  try {
+    const body = (await response.clone().json()) as {
+      error?: { code?: string; message?: string; details?: Record<string, unknown> };
+    };
+    message = body.error?.message || message;
+    code = body.error?.code;
+    details = body.error?.details;
+  } catch {
+    // Keep the status-based error when the server did not return JSON.
+  }
+
+  if (response.status === 401) {
+    const error = new DashboardApiUnauthorizedError(message, { code, details });
+    return error;
+  }
+  return new DashboardApiError(response.status, message, { code, details });
 }

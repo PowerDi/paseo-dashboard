@@ -256,13 +256,15 @@
 
 > 对应 `roadmap.md` M3。目标：登录后完成目标清单中的主要 daemon 操作。
 
+进度以 `progress.md` 为准，本节只标到子任务粒度（截至 2026-08-13）。
+
 ### P3.1 Connection Manager 完善
 
 **任务**
 
-1. 完善 `PaseoConnectionManager`：多 Host 连接管理、重连策略、状态订阅。
-2. 登出/删除 Host/session 失效时清理本地连接和 capability。
-3. 使用 `server_info.features.*` 的 capability gate 决定功能显示。
+1. ~~完善 `PaseoConnectionManager`：多 Host 连接管理、重连策略、状态订阅。~~ 完成。
+2. ~~登出/删除 Host/session 失效时清理本地连接和 capability。~~ 完成。
+3. 使用 `server_info.features.*` 的 capability gate 决定功能显示。**未做，是 P3.1 退出条件**：`server_info.features.*` 全代码库零处使用，`getLastServerInfoMessage()` 只被 Host 导入流程用来读 `version`。P3.5 依赖它。
 
 **产出**
 
@@ -276,9 +278,10 @@
 
 **任务**
 
-1. Project / Workspace 列表与切换。
-2. Agent 列表、创建、停止、恢复、归档。
-3. Agent 实时输出订阅与页面状态管理。
+1. ~~Project / Workspace 列表与切换。~~ 完成。
+2. Agent 列表、创建、停止、恢复、归档。**列表/停止/归档完成；创建与恢复未做**（`createAgent`、`resumeAgent` 零处调用）。创建入口需要 prompt 输入，跟 P3.4 一起做。
+3. ~~Agent 实时输出订阅与页面状态管理。~~ 完成（`agent_update`/`workspace_update`/`project.update` 订阅 + 重连补拉）。
+4. 路由（`roadmap.md` M3 范围里的「路由」）：**未做**。`main.tsx` 只注册 `/` 一条路由，页面和 agent 选择都是 `App.tsx` 的 `useState`，react-router-dom 装了没用。结果是没有 per-page URL、没有 agent 深链、刷新回到空态。做深链要先把导航状态搬进 router。
 
 **产出**
 
@@ -292,9 +295,9 @@
 
 **任务**
 
-1. Timeline：daemon timeline 消息的展示与分页。
-2. Terminal：使用现有 daemon binary frame 规则，自行实现 Web terminal 页面。
-3. 大数据量处理：分页、虚拟滚动、内存上限。
+1. ~~Timeline：daemon timeline 消息的展示与分页。~~ 完成（tail + `before` 分页、epoch/seq 切割合并、7 种条目类型全渲染）。
+2. Terminal：使用现有 daemon binary frame 规则，自行实现 Web terminal 页面。**未开始。** client 侧方法齐备：`listTerminals`/`createTerminal`/`subscribeTerminal`/`unsubscribeTerminal`/`sendTerminalInput`/`killTerminal`/`onTerminalStreamEvent`，需加进 `DaemonClientLike` 的 `Pick<>`。
+3. 大数据量处理：分页、虚拟滚动、内存上限。**只做了分页**；Timeline 没有虚拟滚动，也没有条目内存上限。
 
 **产出**
 
@@ -306,10 +309,12 @@
 
 ### P3.4 Prompt 与权限请求
 
+**未开始。** composer 当前是 `disabled` 占位。
+
 **任务**
 
-1. Prompt 输入区：通过 client 发送。
-2. 权限请求：订阅并响应 daemon 权限消息。
+1. Prompt 输入区：通过 client 发送（`sendMessage`/`sendAgentMessage`），并补上 P3.2 遗留的 `createAgent`/`resumeAgent` 入口。
+2. 权限请求：订阅并响应 daemon 权限消息（`respondToPermission`）。权限有两条来源：agent 快照的 `pendingPermissions`（现在只显示计数）和 `agent_stream` 的 `permission_requested`/`permission_resolved`（现在只用来触发 tail 重拉）。`AgentTimelineItem` union 里没有权限类型，不要按 timeline 条目建模。
 
 **产出**
 
@@ -320,6 +325,8 @@
 - 权限请求流程可用；错误处理与 daemon 协议一致。
 
 ### P3.5 兼容性测试
+
+**未开始。** 前置是 P3.1 任务 3。
 
 **任务**
 
@@ -334,6 +341,27 @@
 **验证**
 
 - 旧 daemon 经现有 protocol compatibility 工作；无能力依赖未标记 fallback。
+
+### P3.6 历史 Web 缺口补齐
+
+M1/M2 里服务端和 contract 测试做完、Web 端从未接上的部分。这些子任务当时按服务端交付就记为完成，所以要单列出来，不要重复整个 P1/P2。
+
+**任务**
+
+1. `POST /auth/change-password`（P1.1）：Web 端没有 client 方法也没有页面。
+2. `PATCH /hosts/:id` 改名（P1.2）：带 `baseVersion` 的乐观并发 409 路径 Web 端从未调用过。
+3. `GET /audit-events`（P2.4）：`product-requirements.md` 里「审计记录」是独立页面，现在没有。
+4. `GET /me`：`app-store` 靠 localStorage 缓存 user，刷新后显示的是缓存值。
+5. SSE 重连（P2.3）：server 已发 `id:` 并支持 `Last-Event-ID`，`dashboardEvents.ts` 能解析 id 但从不回传，也没有重连循环。流断掉（代理超时/网络抖动）后 Host 配置更新静默停止，直到用户刷新页面。
+6. 测试可达性：web 单测没有被任何 npm 脚本覆盖（`web/package.json` 无 `test` 脚本，`test:dashboard` 只跑 contract 和 e2e），CI 也完全不跑 dashboard 测试（`.github/workflows/ci.yml` 的测试 job 逐个点名 workspace）。
+
+**产出**
+
+- 上述路由的 Web client 方法与页面；SSE 断线自动恢复；dashboard 测试进入 npm 脚本与 CI。
+
+**验证**
+
+- 每项都有 Web 端调用路径的测试；改名冲突走 409 分支；断开 SSE 后配置更新能自动恢复且不重复消费事件。
 
 ## P4：多用户与设备安全（M4）
 
@@ -496,6 +524,9 @@ P1.1 认证 ──────────────▶ P1.2 Host 生命周期
 P2.1 增量同步 ──▶ P2.2 设备/session ──▶ P2.3 实时事件 ──▶ P2.4 安全加固
    │
 P3.1 Connection Manager ──▶ P3.2 Agent 面板 ──▶ P3.3 Timeline/Terminal ──▶ P3.4 Prompt/权限 ──▶ P3.5 兼容
+   │                                                                                      ▲
+   └─ P3.1 任务 3（features gating）───────────────────────────────────────────────────────┘
+P3.6 历史 Web 缺口（M1/M2 遗留，不阻塞 P3.2-P3.5，M3 退出前补齐）
    │
 P4.1 多用户 ──▶ P4.2 强认证 ──▶ P4.3 密钥管理 ──▶ P4.4 Grant 审查
    │

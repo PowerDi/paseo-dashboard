@@ -9,8 +9,8 @@
 - **仓库**：Paseo monorepo fork — `git@github.com:PowerDi/paseo-dashboard.git`
 - **代码位置**：`/root/workspace/code/paseo/packages/dashboard/`
 - **Paseo 源码**：`/root/workspace/code/paseo/`（monorepo 根，作为行为事实来源）
-- **当前阶段**：M2 完成（P0-P2.4 全部完成），可进入 P3。
-- **当前分支**：`feat/dashboard-migration`（已推送到 origin）
+- **当前阶段**：M3 进行中。P3.1 完成 2/3（缺 feature gating）、P3.2 完成 2/3（缺 Agent 创建与恢复）、P3.3 的 Timeline 完成、Terminal 与大数据量处理未开始。
+- **当前分支**：`feat/dashboard-migration`（已推送到 origin，但 P3 的代码全部还在工作区未提交）
 
 ## Git 协作
 
@@ -61,6 +61,12 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 - [x] **P2.4 安全加固**：内存 rate limiter（login/register/refresh/change-password 按 IP）；Origin 校验（状态变更请求）；CSP/X-Frame-Options/nosniff headers；审计查询 API `/audit-events`（ULID cursor 分页）；14 个安全测试（跨用户隔离、rate limit、Origin、CSP、审计）。
 - [x] **Git 仓库初始化**：paseo-board 独立仓库基线 commit `09b5a63`。
 - [x] **迁移到 Paseo monorepo**：paseo-board 代码迁移到 `packages/dashboard/`，分支 `feat/dashboard-migration`，commit `3b0ca1c03`，推送到 origin。
+- [x] **P3.1 Connection Manager（2/3）**：`DefaultPaseoConnectionManager` 多 Host 连接槽 + 状态订阅 + 官方 client `reconnect: { enabled: true }`；`daemon-data-store` 承载 projects/workspaces/agents（游标翻页 + 请求版本号防串台）；登出/删除 Host 时 `disconnectAll`/`disconnectHost` 清理连接与本地数据。**未做**：`server_info.features.*` capability gating（全代码库零处使用），P3.1 退出条件未满足。
+- [x] **UI 设计系统对齐 zeno**：token 体系重写（三级 surface #2d2d2d/#383838/#272727、圆角 6/10/12px 三级、14px 正文 + 400/500/600 字重）；列表页改 hover 填充行；Workspace zeno 式空态 + composer 常驻；SectionLabel 收敛为共享组件；页头操作按钮扁平化。
+- [x] **Web i18n**：i18next + react-i18next + browser-languagedetector；zh-CN/en 类型安全字典；设置页语言切换器；localStorage 持久化 + `<html lang>` 同步；全部 UI 字符串（含 aria/tooltip）收进字典。
+- [x] **P3.2 数据接线（读路径 + 认证）**：登录/注册页 + `app-store` 认证状态机（cookie bootstrap、401 全局登出）；`App.tsx` 接 `dashboardRuntime`（host 自动连接/断开、SSE 触发增量 sync）；侧栏树/Hosts/Agents/Workspace 用真实 Host→Project→Agent 数据（`lib/agent-tree.ts` 纯函数 + 单测）；Devices/Settings 接真实 API；Host 导入弹窗改为真实验证（relay 连接读 server_info 版本）+ importHost + sync；时间显示按 locale（`lib/format-time.ts`）。`*Prototype.tsx` 页面全部替换为 `*Page.tsx`。
+- [x] **P3.2 实时订阅 + Agent 操作（写路径）**：`DaemonClientLike` 扩展 `on`/`archiveAgent`/`cancelAgent`；runtime 连接后订阅 `agent_update`/`workspace_update`/`project.update` 推送进 `daemon-data-store`（upsert/remove reducer，未知 agent 无 placement 时回退全量刷新），重连（disconnected→connected）自动 `refreshHost` 补齐断线期间丢的事件；`runtime.archiveAgent/cancelAgent`（归档成功后本地立即标记，防广播延迟）；Agents 行 hover 与 Workspace 头部提供停止（running 时）/归档按钮，归档选中 agent 自动清除选择。**未做**：development-plan 的 P3.2 任务 2 还要求 Agent 创建与恢复，`createAgent`/`resumeAgent` 全代码库零处调用（client 侧两个方法都存在，`resumeAgent(handle, overrides?)` 才是「恢复」，client 没有 unarchive 方法）。创建入口依赖 prompt 输入，和 P3.4 一起做。
+- [x] **P3.3 Timeline（读 + 分页 + 实时）**：`stores/timeline-store.ts`（tail 页加载、`before` 向上分页、epoch/seq 切割合并、staleCursor 回退重拉、流事件节流刷新）+ 10 单测；`DaemonClientLike` 扩展 `fetchAgentTimeline`/`setAgentTimelineSubscription`；runtime `viewAgent/leaveAgent`（selective 订阅 + tail 加载）、`agent_stream` 转发；`useAgentTimeline` hook；`components/timeline.tsx` 渲染 user/assistant/reasoning（折叠）/tool_call（摘要行 + output/diff 折叠）/todo/error/compaction；Workspace 自动滚底（用户上翻时不打扰）。
 
 ### 迁移变更记录
 
@@ -74,15 +80,27 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 | vite.config.ts relay e2ee 路径                                                      | monorepo 目录层级不同                                                                                   |
 | 根 package.json 增加 dashboard workspaces + 脚本                                    | `dev:dashboard:server`、`dev:dashboard:web`、`build:dashboard`、`test:dashboard`、`typecheck:dashboard` |
 
-### 进行中
+### Git 状态（2026-08-13）
 
-- 无
+`feat/dashboard-migration` 上 dashboard 相关 commit 共 3 个，最新的是 `ba416a892`「P2: 多设备登录与 Host 同步」（服务端 devices/sessions/audit/events/security + sync 增量、contract 测试、`api/dashboardApi.ts`、`stores/host-sync-store.ts`），之前是 `3f5221c1a`（progress 更新）和 `3b0ca1c03`（迁移）。**P3.1/P3.2/P3.3 和 UI/i18n 的全部产出都还在工作区，没有提交**：
+
+- 已改：`web/src/App.tsx`、`App.css`、`main.tsx`、`api/dashboardApi.ts`、`paseo/connectionManager.ts(.test)`、`web/package.json`（加 tailwind4/CVA/lucide/i18next）、`web/tsconfig.json`（加 `@/*` paths）、`web/vite.config.ts`、`server/src/lib/event-bus.ts`、`server/src/routes/events.ts`、`tests/contract/src/server-events.test.ts`、`AGENTS.md`。
+- 新增未跟踪：`web/src/{components,hooks,i18n,layouts,lib,pages}/`、`globals.css`、`api/dashboardEvents.ts(.test)`、`api/dashboardApi.test.ts`、`paseo/dashboardRuntime.ts(.test)`、`stores/{app-store,daemon-data-store,timeline-store}.ts` 及各自单测。`stores/host-sync-store.ts` 是 P2 已提交的文件，不在未跟踪列表里。
+
+接续时先确认这些改动是否还在，再决定是提交还是继续开发。
 
 ### 待开始
 
-1. **P2 多设备登录与 Host 同步** — 账号级 revision、增量 sync、tombstone、设备/session 页面、实时失效通知。
-2. **P3 Agent 面板 UI** — 以官方 App 为参考重写 UI，增加看板等新功能。需要研究官方 App 的 stores/daemon 逻辑。
-3. 后续见 `docs/development-plan.md` 的完整序列。
+按依赖排序。1-4 阻塞 M3 退出，5 是 M1/M2 被跳过的历史缺口（服务端做了、Web 端没接）。
+
+1. **P3.3 Terminal**（当前优先）— 用 daemon binary frame 规则实现 Web terminal（参考 Paseo `docs/terminal-performance.md`）。client 侧已有全套方法：`subscribeTerminal`/`unsubscribeTerminal`/`listTerminals`/`createTerminal`/`killTerminal`/`sendTerminalInput`/`onTerminalStreamEvent`，需加进 `DaemonClientLike` 的 `Pick<>`。同时补 P3.3 剩下的「大数据量处理」：虚拟滚动 + 条目内存上限（Timeline 现在两者都没有）。
+2. **P3.4 Prompt 与权限请求** — composer 目前 `disabled` 占位（i18n key `workspace.composerUnavailable` 文案还写着「将在时间线接入后开放」，已过期）。要接 `client.sendMessage`/`sendAgentMessage`、`createAgent` 与 `resumeAgent`（P3.2 任务 2 遗留，创建和恢复入口都不存在）、权限请求展示与 `respondToPermission`。权限数据有两条来源：agent 快照的 `pendingPermissions`（现在只在 Workspace 头部显示计数）和 `agent_stream` 的 `permission_requested`/`permission_resolved` 事件（timeline-store 只用来触发 tail 重拉，没有渲染）。注意 `AgentTimelineItem` union 里没有权限类型，权限不是 timeline 条目。
+3. **P3.1 收尾 + feature gating** — `server_info.features.*` 一次性 gating 目前零处使用，`getLastServerInfoMessage()` 只被 import 流程用来读 `version`。这是 P3.1 的退出条件，也是 P3.5 的前置。
+4. **P3.5 兼容性测试** — daemon 版本矩阵 smoke tests。
+   另有 `roadmap.md` M3 范围里的「路由」未做（见下面「Web 数据接线」的路由说明），要不要在 M3 内补取决于是否需要深链。
+5. **P3.6 历史 Web 缺口补齐** — 服务端路由已实现、Web 端完全没接的四项：`POST /auth/change-password`（P1.1 记为完成，但没有页面和 client 方法）、`PATCH /hosts/:id` 改名（P1.2 的乐观并发 409 路径 Web 端从未调用过）、`GET /audit-events`（P2.4 完成，产品需求里「审计记录」是独立页面）、`GET /me`（`app-store` 现在用 localStorage 缓存 user，刷新后靠缓存显示邮箱，有 `/me` 可以直接取）。另加 SSE 重连：server 已发 `id:` 并支持 `Last-Event-ID`，`dashboardEvents.ts` 能解析 id 但从不回传，也没有重连循环——流断掉（代理超时/网络抖动）后 Host 配置更新静默停止，直到用户刷新页面。以及把 web 单测接进 npm 脚本和 CI（见下面测试统计）。development-plan.md 已补 P3.6 小节。
+6. Timeline 后续优化（记录，不阻塞）：流式期间靠节流 tail 重拉（400ms/次，limit 50），未做增量 stream reducer；「加载更早」是按钮而非滚动哨兵。
+7. 后续见 docs/development-plan.md 的完整序列。
 
 ## 关键约束（回答问题时必须遵守）
 
@@ -160,7 +178,8 @@ npm run dev:dashboard:server   # 后端 端口 3000
 npm run dev:dashboard:web      # 前端 端口 5173
 
 # 测试
-npm run test:dashboard         # 42 测试
+npm run test:dashboard         # contract 79 + e2e vitest 8（不含 web 单测）
+npx vitest run packages/dashboard/web/src   # web 单测 62
 
 # 类型检查
 npm run typecheck:dashboard
@@ -184,10 +203,34 @@ npm run typecheck:dashboard
 - `DaemonClient` 从 `@getpaseo/client/internal/daemon-client` 导入（当前 Paseo 版本不再从主入口导出）。
 - `@getpaseo/relay/e2ee` 的 vite alias 指向 `../../relay/dist/e2ee.js`（monorepo 内路径）。
 
+### Web 数据接线（P3.2）
+
+- 认证：Web 用 HttpOnly cookie；`stores/app-store.ts` 的 `bootstrap()` 用 `listHosts()` 探测（200→ready，401→未登录，其他→可重试错误）；`dashboardApi.setUnauthorizedHandler` 全局接 401 登出。用户对象取自登录/注册响应并缓存在 localStorage 供设置页显示——服务端有 `GET /api/v1/me` 可以直接取，web 端还没接（见待开始 P3.6）。
+- 路由：`main.tsx` 只注册了 `/` 一条路由，页面切换是 `App.tsx` 里的 `useState<Page>`，agent 选择是 `useState<AgentSelection>`。react-router-dom 装了但没用起来，所以没有 per-page URL、没有 agent 深链、刷新回到 workspace 空态。要做深链就得先把导航状态搬进 router。
+- 数据流：`host-sync-store`（Dashboard host 注册表）→ `App.tsx` effect 对每个 host `dashboardRuntime.connectHost`（断线 host 自动 disconnect）→ `hooks/use-host-runtimes.ts` 订阅每个 host 的连接态 + daemon 数据 → `lib/agent-tree.ts` 纯函数构建侧栏树/列表行。SSE `host.upserted/deleted` 只触发一次增量 `sync()`（事件 data 是松散类型，不直接消费）。
+- **分组键的坑**：agent placement 的 `projectKey` 字段实际是 `projectId`（daemon 在 `packages/server/src/server/session.ts` 里填的），与项目描述符自己的 `projectKey`（新式 key）不同源。按 `projectId` 分组，否则同一项目出现两行。
+- Host 导入的真实验证：`dashboardRuntime.verifyConnection(host)` 临时连 relay 读 `server_info.version` 后即断开，临时 host 不进 sync store。
+- SSE 长连接会让 Playwright 的 `waitUntil: "networkidle"` 永远超时，登录后一律用 `domcontentloaded`。
+- 实时数据：`dashboardRuntime` 连接后通过 `client.on("agent_update"/"workspace_update"/"project.update")` 把推送写进 `daemon-data-store` 的 apply reducer；重连时 `refreshHost` 兜底。测试里 mock `DaemonClient["on"]` 重载集很难精确实现（`DaemonEventHandler` 变体的事件 union 与 `SessionOutboundMessage` 不同），fake 用属性 + `as DaemonClientLike["on"]` 断言。
+- Timeline：daemon 的 live `agent_stream` 可能是 delta 形态，dashboard 不做增量 reducer——`timeline-store` 收到流事件后节流重拉 tail 页，用页首 `seqStart` 切割合并（同 epoch 且重叠/相邻时保留更早历史，daemon 投影替换重叠后缀）。语义依据见 Paseo `docs/timeline-sync.md`。`sourceSeqRanges` 字段是 `startSeq/endSeq`。
+- **权限不是 timeline 条目**：`AgentTimelineItem` 的 union 只有 7 种（user_message / assistant_message / reasoning / tool_call / todo / error / compaction），`components/timeline.tsx` 全部渲染了，覆盖完整。权限走两条独立通道：agent 快照的 `pendingPermissions` 数组，和 `agent_stream` 的 `permission_requested`/`permission_resolved` 事件（在 `timeline-store` 的 `REFRESH_EVENT_TYPES` 里只用来触发 tail 重拉）。做 P3.4 时不要去扩 timeline item 类型。
+- `DaemonClientLike` 是 `Pick<DaemonClient, ...>`（`paseo/connectionManager.ts:13`），当前只挑了 10 个方法。加新 daemon 能力先往这个 Pick 里加名字，不要在页面里绕过 connection manager 直接摸 `DaemonClient`。
+
+### Web UI 与 i18n
+
+- 设计 token 在 `web/src/globals.css`（surface/圆角/字阶体系，注释即规范）；结构样式在 `web/src/App.css`。UI 字符串一律走 i18n，不写死。
+- i18n 在 `web/src/i18n/`：`locales/zh-CN.ts` 是字典事实来源，`en.ts` 用 `typeof zhCN` 约束（漏译编译报错）；key 类型经 `react-i18next.d.ts` 模块增强，`t()` 拼错 key 编译报错。
+- 语言检测顺序 localStorage（key `paseo-dashboard-language`）→ navigator；切换器在设置页「偏好」。
+- 字典里 `workspace.composerUnavailable` 的文案（「消息发送将在时间线接入后开放」）在 Timeline 落地后已过期，做 P3.4 时连文案一起换掉。
+- headless Chrome 截图 QA 的坑：首帧不推进 CSS 动画（`startTime: null`），入场动画元素全透明；截图前先 `mouse.move` + `wheel` 触发合成。
+
 ### 测试统计
 
-- web 2 + contract 75 + e2e vitest 8 = **85 测试**全量通过。
+- web 单测 **62**（8 文件：dashboardApi 1、dashboardEvents 4、connectionManager 7、dashboardRuntime 12、daemon-data-store 12、timeline-store 10、app-store 7、agent-tree 9）。2026-08-13 实跑 8 文件 62 通过。
+- contract **79**（server-auth 16、server-security 14、server-events 14、server-hosts 13、server-sync 8、server-devices-sessions 9、auth 2、host-sync 3）+ e2e vitest **8**（connection-manager 4、offer-parser 3、placeholder 1）= 静态统计 **149** 含 web。
 - Playwright 浏览器 E2E 3 测试（需 `PLAYWRIGHT_BROWSERS_PATH=/tmp/playwright-browsers`）。
+- **web 单测没有被任何 npm 脚本覆盖**：`web/package.json` 没有 `test` 脚本，`test:dashboard` 只跑 contract 和 e2e 两个 workspace。跑 web 单测要从根目录显式给路径：`npx vitest run packages/dashboard/web/src`（根 `vitest.config.ts` 把 `@` 别名指向 `packages/app/src`，所以 web 测试文件一律用相对路径 import，不要写 `@/`）。
+- **CI 完全不跑 dashboard 测试**：`.github/workflows/ci.yml` 的测试 job 都是 `npm run test --workspace=<pkg>` 点名指定，没有 dashboard。根 `npm run typecheck`/`lint`/`format:check` 是 `--workspaces`，这三项覆盖到了。
 - Lefthook pre-commit hook 会跑全 monorepo typecheck（含 app/desktop/cli），这些包有预先存在的 typecheck 错误，不是 dashboard 引入的。dashboard 的 `typecheck:dashboard` 全部通过。提交时可用 `--no-verify` 绕过。
 
 ## 接续方式
@@ -203,19 +246,27 @@ npm run typecheck:dashboard
 
 ## 修改记录
 
-| 日期       | 修改人 | 说明                                                                                             |
-| ---------- | ------ | ------------------------------------------------------------------------------------------------ |
-| 2026-08-12 | Codex  | 初版创建                                                                                         |
-| 2026-08-12 | Codex  | 完成 P0.1 选型 + P0.2 骨架                                                                       |
-| 2026-08-12 | Codex  | 完成 P0.3 最小认证与 Host 存储                                                                   |
-| 2026-08-12 | Codex  | 完成 P0.4 Web 连接代码                                                                           |
-| 2026-08-12 | Codex  | P0.5 完成：M0 退出条件全部满足                                                                   |
-| 2026-08-12 | Codex  | P1.1 完成：Argon2id、access/refresh 分离、reuse 检测                                             |
-| 2026-08-12 | Codex  | P1.2 完成：Host 更新、fingerprint 去重、幂等键                                                   |
-| 2026-08-12 | Codex  | P1.3 完成：审计事件补齐、setErrorHandler、KEK 权限检查                                           |
-| 2026-08-12 | Codex  | P1.4 完成：部署文档                                                                              |
-| 2026-08-12 | Codex  | P2.1 完成：增量同步（lastSyncRevision、sync API、client store、8 测试）                          |
-| 2026-08-12 | Codex  | P2.2 完成：设备/Session 管理 API + 设备追踪 + 9 测试                                             |
-| 2026-08-12 | Codex  | P2.3 完成：SSE 配置事件总线 + 事件分发 + 10 测试                                                 |
-| 2026-08-12 | Codex  | P2.4 完成：安全加固（rate limit/CSRF/CSP/审计 API）+ 14 测试                                     |
-| 2026-08-12 | Codex  | 迁移到 Paseo monorepo `packages/dashboard/`，分支 `feat/dashboard-migration`，commit `3b0ca1c03` |
+| 日期       | 修改人           | 说明                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-12 | Codex            | 初版创建                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 2026-08-12 | Codex            | 完成 P0.1 选型 + P0.2 骨架                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 2026-08-12 | Codex            | 完成 P0.3 最小认证与 Host 存储                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 2026-08-12 | Codex            | 完成 P0.4 Web 连接代码                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 2026-08-12 | Codex            | P0.5 完成：M0 退出条件全部满足                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 2026-08-12 | Codex            | P1.1 完成：Argon2id、access/refresh 分离、reuse 检测                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 2026-08-12 | Codex            | P1.2 完成：Host 更新、fingerprint 去重、幂等键                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 2026-08-12 | Codex            | P1.3 完成：审计事件补齐、setErrorHandler、KEK 权限检查                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 2026-08-12 | Codex            | P1.4 完成：部署文档                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 2026-08-12 | Codex            | P2.1 完成：增量同步（lastSyncRevision、sync API、client store、8 测试）                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 2026-08-12 | Codex            | P2.2 完成：设备/Session 管理 API + 设备追踪 + 9 测试                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 2026-08-12 | Codex            | P2.3 完成：SSE 配置事件总线 + 事件分发 + 10 测试                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 2026-08-12 | Codex            | P2.4 完成：安全加固（rate limit/CSRF/CSP/审计 API）+ 14 测试                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 2026-08-12 | Codex            | 迁移到 Paseo monorepo `packages/dashboard/`，分支 `feat/dashboard-migration`，commit `3b0ca1c03`                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 2026-08-12 | Codex            | P3 Agent UI 视觉原型：引入 Tailwind 4/CVA/lucide，完成 Zeno 风格 shell、Workspace、Hosts、Agents、Devices、Settings 和 Host 导入弹窗；build:dashboard、typecheck:dashboard、lint、格式检查通过                                                                                                                                                                                                                                                                                                                                           |
+| 2026-08-12 | Codex + 4 agents | P3.1/P3.2 后端运行时基础：多 Host 连接生命周期、daemon projects/workspaces/agents 状态层、Dashboard SSE/API 客户端、runtime composition；定向 34 测试通过，dashboard build/typecheck/lint/format 通过                                                                                                                                                                                                                                                                                                                                    |
+| 2026-08-12 | Codex + 3 agents | P3 UI Zeno 风格重做：窄侧栏、项目/会话树、低噪声深色主区、连续消息阅读列、底部 composer，以及 Hosts/Agents/Devices/Settings 低噪声列表页；5173 smoke、dashboard build/typecheck/lint/format 通过                                                                                                                                                                                                                                                                                                                                         |
+| 2026-08-13 | Claude           | UI 设计系统对齐 zeno（token 重写、hover 行、空态、扁平按钮）+ Web i18n（i18next 类型安全字典、语言切换器、持久化）；typecheck/lint/format 通过，Playwright 截图验证中英切换                                                                                                                                                                                                                                                                                                                                                              |
+| 2026-08-13 | Claude           | P3.2 读路径 + 认证接线：LoginPage/app-store、runtime 接入 App/Shell、真实树与列表页、真实 Host 导入验证、locale 时间格式化；20 单测 + typecheck/lint 通过；Playwright 全流程验证（注册→登录→导入本机 daemon→树/工作区/代理页真实数据）                                                                                                                                                                                                                                                                                                   |
+| 2026-08-13 | Claude           | P3.2 收尾：daemon 实时推送订阅（agent/workspace/project update 进 store + 重连刷新）+ Agent 停止/归档写路径（Agents 行操作 + Workspace 头部操作）；28 定向单测 + typecheck/lint/format 通过；Playwright 验证操作按钮渲染                                                                                                                                                                                                                                                                                                                 |
+| 2026-08-13 | Claude           | P3.3 Timeline：timeline-store（tail/向上分页/epoch-seq 合并/流事件节流刷新）+ viewAgent selective 订阅 + Workspace 时间线渲染（全部 item 类型、自动滚底、加载更早）；39 定向单测 + typecheck/lint/format 通过；Playwright 验证真实会话历史与分页                                                                                                                                                                                                                                                                                         |
+| 2026-08-13 | Claude           | 按仓库实际代码校准计划：当前阶段改为「M3 进行中」；补 P3.1 条目并标注 feature gating 未做；待开始重排为 Terminal → Prompt/权限 → P3.1 收尾 → P3.5 → 新增 P3.6 历史 Web 缺口（change-password / host 改名 / 审计页 / `/me` / SSE 重连）；测试统计改为实际值（web 62 实跑、contract 79、e2e 8）并记录 web 单测不在任何 npm 脚本内、CI 不跑 dashboard；补路由现状、权限非 timeline 条目、`DaemonClientLike` Pick 三条技术要点；同步校准 development-plan.md 的 P3（逐条标完成/未做，P3.3 拆出 Terminal 与大数据量，新增 P3.6 小节与依赖图） |

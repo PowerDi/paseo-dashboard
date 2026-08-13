@@ -104,8 +104,9 @@ See [docs/development.md](docs/development.md) for full setup, build sync requir
 
 ## Critical rules
 
-- **NEVER restart the main Paseo daemon on port 6767 without permission** — it manages all running agents. If you're an agent, restarting it kills your own process.
-- **NEVER assume a timeout means the service needs restarting** — timeouts can be transient.
+- **主 daemon 保护规则（端口 6767）**：除非用户在当前对话中明确授权，绝不主动重启、停止、kill、reload，或执行任何可能导致监听 `6767` 的主 Paseo daemon 退出/重载的操作。它管理所有运行中的 agent；重启会中断它们，也可能终止当前 agent 自己的进程。
+- **只能只读检查 6767**：默认只允许查看端口、状态和日志。超时、测试失败或连接异常都不能作为重启理由；先继续诊断并向用户报告。
+- **若用户明确授权操作 6767**，执行前仍需说明影响范围，并优先确认目标进程确实是主 daemon，而不是 Dashboard 或临时开发服务。
 - **NEVER add auth checks to tests** — agent providers handle their own auth.
 - **Before changing app routes, startup routing, remembered workspace restore, or active workspace selection, read [docs/expo-router.md](docs/expo-router.md).**
 - **NEVER run the full test suite locally.** The test suites are heavy and will freeze the machine, especially if multiple agents run them in parallel. Rules:
