@@ -80,6 +80,30 @@ class FakeClient implements DaemonClientLike {
 
   async setAgentTimelineSubscription(): Promise<void> {}
 
+  listTerminals(): never {
+    throw new Error("not implemented in fake");
+  }
+
+  createTerminal(): never {
+    throw new Error("not implemented in fake");
+  }
+
+  killTerminal(): never {
+    throw new Error("not implemented in fake");
+  }
+
+  subscribeTerminal(): never {
+    throw new Error("not implemented in fake");
+  }
+
+  unsubscribeTerminal(): void {}
+
+  sendTerminalInput(): void {}
+
+  onTerminalStreamEvent(): () => void {
+    return () => undefined;
+  }
+
   emit(state: ConnectionState): void {
     this.state = state;
     for (const listener of this.listeners) listener(state);

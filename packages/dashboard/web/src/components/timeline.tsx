@@ -193,7 +193,16 @@ export function TimelineView({
         </p>
       )}
       {timeline.entries.map((entry) => (
-        <TimelineItemView key={`${entry.seqStart}-${entry.seqEnd}`} entry={entry} />
+        // content-visibility skips layout/paint for offscreen entries so long
+        // timelines stay cheap without a virtual-list dependency (the store
+        // caps entry count; this caps render cost). The intrinsic size keeps
+        // the scrollbar stable while items are unrendered.
+        <div
+          key={`${entry.seqStart}-${entry.seqEnd}`}
+          className="[contain-intrinsic-size:auto_64px] [content-visibility:auto]"
+        >
+          <TimelineItemView entry={entry} />
+        </div>
       ))}
     </div>
   );

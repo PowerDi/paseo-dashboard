@@ -7,6 +7,13 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 const TAIL_LIMIT = 50;
 const OLDER_LIMIT = 50;
 const STREAM_REFRESH_THROTTLE_MS = 400;
+/**
+ * Upper bound on in-memory entries per agent. Long streaming sessions append
+ * on every tail refresh while keeping loaded history; without a cap the array
+ * grows for as long as the tab stays open. Trimmed history stays reachable
+ * through "load older" (startCursor moves to the first kept entry).
+ */
+const MAX_ENTRIES = 500;
 
 export type TimelinePage = FetchAgentTimelineResponseMessage["payload"];
 export type TimelineEntry = TimelinePage["entries"][number];
@@ -53,6 +60,7 @@ export interface TimelineStoreDependencies {
   getClient(hostId: string): TimelineDataClient | null;
   now?: () => number;
   throttleMs?: number;
+  maxEntries?: number;
 }
 
 export function timelineKey(hostId: string, agentId: string): string {
@@ -87,6 +95,21 @@ export function createTimelineStore(
 ): StoreApi<TimelineStoreState> {
   const now = dependencies.now ?? (() => Date.now());
   const throttleMs = dependencies.throttleMs ?? STREAM_REFRESH_THROTTLE_MS;
+  const maxEntries = dependencies.maxEntries ?? MAX_ENTRIES;
+
+  /** Drops the oldest entries above the cap; they stay loadable via "load older". */
+  function capEntries(state: AgentTimelineState): AgentTimelineState {
+    if (state.entries.length <= maxEntries) return state;
+    const entries = state.entries.slice(state.entries.length - maxEntries);
+    const first = entries[0];
+    return {
+      ...state,
+      entries,
+      hasOlder: true,
+      startCursor:
+        state.epoch !== null ? { epoch: state.epoch, seq: first.seqStart } : state.startCursor,
+    };
+  }
   const refreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const requestGenerations = new Map<string, number>();
 
@@ -150,13 +173,13 @@ export function createTimelineStore(
         return replace;
       }
       const kept = current.entries.filter((entry) => entry.seqEnd < cut);
-      return {
+      return capEntries({
         ...base,
         entries: [...kept, ...incoming],
         maxSeq: page.window.maxSeq,
         startCursor: kept.length > 0 ? current.startCursor : page.startCursor,
         hasOlder: kept.length > 0 ? current.hasOlder : page.hasOlder,
-      };
+      });
     }
 
     async function loadTail(hostId: string, agentId: string): Promise<void> {

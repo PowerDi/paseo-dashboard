@@ -18,6 +18,18 @@ import {
   type HostConnectionState,
   type PaseoConnectionManager,
 } from "./connectionManager";
+import {
+  openTerminalSession,
+  type TerminalSession,
+  type TerminalSessionSink,
+  type TerminalSize,
+} from "./terminalSession";
+
+export interface DashboardTerminalInfo {
+  id: string;
+  name: string;
+  title?: string;
+}
 
 export interface DashboardHostRuntimeState {
   connection: HostConnectionState;
@@ -47,6 +59,23 @@ export interface DashboardPaseoRuntime {
   viewAgent(hostId: string, agentId: string): Promise<void>;
   leaveAgent(hostId: string, agentId: string): Promise<void>;
   loadOlderTimeline(hostId: string, agentId: string): Promise<void>;
+  listTerminals(
+    hostId: string,
+    cwd: string,
+    workspaceId?: string,
+  ): Promise<DashboardTerminalInfo[]>;
+  createTerminal(
+    hostId: string,
+    cwd: string,
+    options?: { workspaceId?: string; size?: TerminalSize },
+  ): Promise<DashboardTerminalInfo>;
+  killTerminal(hostId: string, terminalId: string): Promise<void>;
+  openTerminal(
+    hostId: string,
+    terminalId: string,
+    sink: TerminalSessionSink,
+    size: TerminalSize | null,
+  ): TerminalSession;
   getTimeline(hostId: string, agentId: string): AgentTimelineState | null;
   subscribeTimeline(
     hostId: string,
@@ -229,6 +258,33 @@ export function createDashboardRuntime(
 
     async loadOlderTimeline(hostId, agentId) {
       await timelineStore.getState().loadOlder(hostId, agentId);
+    },
+
+    async listTerminals(hostId, cwd, workspaceId) {
+      const payload = await requireClient(hostId).listTerminals(cwd, undefined, { workspaceId });
+      return payload.terminals;
+    },
+
+    async createTerminal(hostId, cwd, options) {
+      const payload = await requireClient(hostId).createTerminal(cwd, undefined, undefined, {
+        workspaceId: options?.workspaceId,
+        size: options?.size,
+      });
+      if (payload.error !== null || !payload.terminal) {
+        throw new Error(payload.error ?? "Failed to create terminal");
+      }
+      return payload.terminal;
+    },
+
+    async killTerminal(hostId, terminalId) {
+      const payload = await requireClient(hostId).killTerminal(terminalId);
+      if (!payload.success) {
+        throw new Error(`Failed to kill terminal ${terminalId}`);
+      }
+    },
+
+    openTerminal(hostId, terminalId, sink, size) {
+      return openTerminalSession({ client: requireClient(hostId), terminalId, sink, size });
     },
 
     getTimeline(hostId, agentId) {

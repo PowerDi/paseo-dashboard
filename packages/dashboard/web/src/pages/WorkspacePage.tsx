@@ -12,6 +12,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TimelineView } from "@/components/timeline";
+import { WorkspaceTerminal } from "@/components/workspace-terminal";
 import { Button } from "@/components/ui/button";
 import { useAgentTimeline } from "@/hooks/use-agent-timeline";
 import type { AgentContext } from "@/lib/agent-tree";
@@ -47,6 +48,7 @@ export function WorkspacePage({ context, onCancelAgent, onArchiveAgent }: Worksp
   const { t, i18n } = useTranslation();
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<"cancel" | "archive" | null>(null);
+  const [view, setView] = useState<"timeline" | "terminal">("timeline");
   const agentId = context?.entry.agent.id ?? null;
   const hostId = context?.host.id ?? null;
   const { timeline, loadOlder } = useAgentTimeline(hostId, agentId);
@@ -70,6 +72,7 @@ export function WorkspacePage({ context, onCancelAgent, onArchiveAgent }: Worksp
 
   useEffect(() => {
     lastSeqRef.current = -1;
+    setView("timeline");
   }, [agentId]);
 
   function runAction(kind: "cancel" | "archive", action: () => Promise<void>) {
@@ -144,6 +147,29 @@ export function WorkspacePage({ context, onCancelAgent, onArchiveAgent }: Worksp
         <span className="workspace-header-context">
           {t(`agents.status.${status}`)} · {agent.provider}
         </span>
+        <div
+          className="ml-3 flex items-center gap-0.5 rounded-[var(--radius-md)] bg-[var(--surface-soft)] p-0.5"
+          role="tablist"
+          aria-label={t("workspace.view.timeline")}
+        >
+          {(["timeline", "terminal"] as const).map((candidate) => (
+            <button
+              key={candidate}
+              type="button"
+              role="tab"
+              aria-selected={view === candidate}
+              className={cn(
+                "rounded-[calc(var(--radius-md)-2px)] px-2.5 py-1 text-[12px] font-medium",
+                view === candidate
+                  ? "bg-[var(--surface-muted)] text-[var(--foreground)]"
+                  : "text-[var(--foreground-subtle)] hover:text-[var(--foreground-muted)]",
+              )}
+              onClick={() => setView(candidate)}
+            >
+              {t(`workspace.view.${candidate}`)}
+            </button>
+          ))}
+        </div>
         <div className="ml-2 flex items-center gap-1">
           {status === "running" && (
             <Button
@@ -170,64 +196,77 @@ export function WorkspacePage({ context, onCancelAgent, onArchiveAgent }: Worksp
         </div>
       </header>
 
-      <div className="workspace-thread-scroll" ref={scrollRef}>
-        <section className="workspace-thread" aria-label={t("workspace.messagesAria", { title })}>
-          <div className="mb-4 rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-panel)] p-4">
-            <div className="space-y-2.5">
-              <MetaRow
-                icon={<Bot size={13} />}
-                label={t("workspace.meta.provider")}
-                value={agent.model ? `${agent.provider} · ${agent.model}` : agent.provider}
-              />
-              <MetaRow
-                icon={<Terminal size={13} />}
-                label={t("workspace.meta.directory")}
-                value={agent.cwd}
-              />
-              {project.checkout.currentBranch && (
-                <MetaRow
-                  icon={<GitBranch size={13} />}
-                  label={t("workspace.meta.branch")}
-                  value={project.checkout.currentBranch}
-                />
-              )}
-              <MetaRow
-                icon={<Clock size={13} />}
-                label={t("workspace.meta.updated")}
-                value={formatDateTime(agent.updatedAt, i18n.language)}
-              />
-              {pendingPermissions > 0 && (
-                <MetaRow
-                  icon={<ShieldQuestion size={13} />}
-                  label={t("workspace.meta.permissions")}
-                  value={t("workspace.meta.pendingPermissions", { count: pendingPermissions })}
-                />
-              )}
-            </div>
-          </div>
-
-          <TimelineView timeline={timeline} onLoadOlder={loadOlder} />
-        </section>
-      </div>
-
-      <footer className="workspace-composer" aria-label={t("workspace.composerAria")}>
-        <div className="workspace-composer-project">
-          <Folder size={14} />
-          <span>{project.projectName}</span>
-        </div>
-        <div className="workspace-composer-input">
-          <textarea
-            aria-label={t("workspace.messageInputAria")}
-            disabled
-            placeholder={t("workspace.composerUnavailable")}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+      {view === "terminal" ? (
+        <div className="min-h-0 flex-1 px-8 py-5">
+          <WorkspaceTerminal
+            key={`${context.host.id}:${agent.cwd}:${agent.workspaceId ?? ""}`}
+            hostId={context.host.id}
+            cwd={agent.cwd}
+            workspaceId={agent.workspaceId}
           />
-          <button className="workspace-composer-send" aria-label={t("workspace.send")} disabled>
-            <ArrowUp size={17} />
-          </button>
         </div>
-      </footer>
+      ) : (
+        <div className="workspace-thread-scroll" ref={scrollRef}>
+          <section className="workspace-thread" aria-label={t("workspace.messagesAria", { title })}>
+            <div className="mb-4 rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-panel)] p-4">
+              <div className="space-y-2.5">
+                <MetaRow
+                  icon={<Bot size={13} />}
+                  label={t("workspace.meta.provider")}
+                  value={agent.model ? `${agent.provider} · ${agent.model}` : agent.provider}
+                />
+                <MetaRow
+                  icon={<Terminal size={13} />}
+                  label={t("workspace.meta.directory")}
+                  value={agent.cwd}
+                />
+                {project.checkout.currentBranch && (
+                  <MetaRow
+                    icon={<GitBranch size={13} />}
+                    label={t("workspace.meta.branch")}
+                    value={project.checkout.currentBranch}
+                  />
+                )}
+                <MetaRow
+                  icon={<Clock size={13} />}
+                  label={t("workspace.meta.updated")}
+                  value={formatDateTime(agent.updatedAt, i18n.language)}
+                />
+                {pendingPermissions > 0 && (
+                  <MetaRow
+                    icon={<ShieldQuestion size={13} />}
+                    label={t("workspace.meta.permissions")}
+                    value={t("workspace.meta.pendingPermissions", { count: pendingPermissions })}
+                  />
+                )}
+              </div>
+            </div>
+
+            <TimelineView timeline={timeline} onLoadOlder={loadOlder} />
+          </section>
+        </div>
+      )}
+
+      {view === "timeline" && (
+        <footer className="workspace-composer" aria-label={t("workspace.composerAria")}>
+          <div className="workspace-composer-project">
+            <Folder size={14} />
+            <span>{project.projectName}</span>
+          </div>
+          <div className="workspace-composer-input">
+            <textarea
+              aria-label={t("workspace.messageInputAria")}
+              disabled
+              placeholder={t("workspace.composerUnavailable")}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+            />
+            <button className="workspace-composer-send" aria-label={t("workspace.send")} disabled>
+              <ArrowUp size={17} />
+            </button>
+          </div>
+        </footer>
+      )}
     </>
   );
 }

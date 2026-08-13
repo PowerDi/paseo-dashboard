@@ -110,6 +110,39 @@ describe("timeline store", () => {
     expect(state?.startCursor).toEqual({ seq: 0, epoch: "epoch-1" });
   });
 
+  test("tail merge drops the oldest entries above the memory cap and keeps them loadable", async () => {
+    const fetchAgentTimeline = vi
+      .fn<TimelineDataClient["fetchAgentTimeline"]>()
+      .mockResolvedValueOnce(
+        page({
+          entries: [entry(0, 0), entry(1, 1), entry(2, 2)],
+          hasOlder: false,
+          startCursor: { seq: 0, epoch: "epoch-1" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        page({
+          entries: [entry(3, 3), entry(4, 4)],
+          hasOlder: false,
+          startCursor: { seq: 3, epoch: "epoch-1" },
+        }),
+      );
+    const store = createTimelineStore({
+      getClient: () => createClient(fetchAgentTimeline),
+      maxEntries: 4,
+    });
+
+    await store.getState().open("host-a", "agent-1");
+    await store.getState().open("host-a", "agent-1");
+
+    const state = store.getState().byKey.get(KEY);
+    expect(state?.entries.map((e) => e.seqStart)).toEqual([1, 2, 3, 4]);
+    // The trimmed history stays reachable via "load older".
+    expect(state?.hasOlder).toBe(true);
+    expect(state?.startCursor).toEqual({ seq: 1, epoch: "epoch-1" });
+    expect(state?.maxSeq).toBe(4);
+  });
+
   test("tail refresh replaces everything on epoch change or gap", async () => {
     const fetchAgentTimeline = vi
       .fn<TimelineDataClient["fetchAgentTimeline"]>()

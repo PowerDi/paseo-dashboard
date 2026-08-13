@@ -22,6 +22,13 @@ export type DaemonClientLike = Pick<
   | "cancelAgent"
   | "fetchAgentTimeline"
   | "setAgentTimelineSubscription"
+  | "listTerminals"
+  | "createTerminal"
+  | "killTerminal"
+  | "subscribeTerminal"
+  | "unsubscribeTerminal"
+  | "sendTerminalInput"
+  | "onTerminalStreamEvent"
 >;
 export type DaemonClientFactory = (config: DaemonClientConfig) => DaemonClientLike;
 export type PaseoConnectionListener = (state: HostConnectionState) => void;

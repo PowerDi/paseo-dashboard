@@ -296,8 +296,8 @@
 **任务**
 
 1. ~~Timeline：daemon timeline 消息的展示与分页。~~ 完成（tail + `before` 分页、epoch/seq 切割合并、7 种条目类型全渲染）。
-2. Terminal：使用现有 daemon binary frame 规则，自行实现 Web terminal 页面。**未开始。** client 侧方法齐备：`listTerminals`/`createTerminal`/`subscribeTerminal`/`unsubscribeTerminal`/`sendTerminalInput`/`killTerminal`/`onTerminalStreamEvent`，需加进 `DaemonClientLike` 的 `Pick<>`。
-3. 大数据量处理：分页、虚拟滚动、内存上限。**只做了分页**；Timeline 没有虚拟滚动，也没有条目内存上限。
+2. ~~Terminal：使用现有 daemon binary frame 规则，自行实现 Web terminal 页面。~~ 完成（`paseo/terminalSession.ts` 订阅/输入/resize claim-update/退出 + `components/terminal-view.tsx` xterm 渲染 + Workspace 头部 Timeline/Terminal 切换 + 终端列表创建/结束）。restore 走 `features["terminal-restore-modes"]` gate，无 feature 时回退 snapshot 帧。
+3. ~~大数据量处理：分页、虚拟滚动、内存上限。~~ 完成：分页（已有）+ 条目内存上限（timeline-store 每 agent 500 条，裁掉的历史经 `startCursor` 回翻）+ 渲染上限（timeline 条目 `content-visibility: auto` 跳过屏幕外渲染，未引入虚拟列表库——条目数已被内存上限约束）。
 
 **产出**
 

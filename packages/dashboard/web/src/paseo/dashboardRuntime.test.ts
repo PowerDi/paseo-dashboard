@@ -227,6 +227,30 @@ class RuntimeClient implements DaemonClientLike, DaemonDataClient {
   readonly setAgentTimelineSubscription = vi.fn(async (_agentIds: string[]) => undefined);
   readonly fetchAgentTimeline = vi.fn(async (agentId: string) => timelinePage(agentId));
 
+  listTerminals(): never {
+    throw new Error("not implemented in fake");
+  }
+
+  createTerminal(): never {
+    throw new Error("not implemented in fake");
+  }
+
+  killTerminal(): never {
+    throw new Error("not implemented in fake");
+  }
+
+  subscribeTerminal(): never {
+    throw new Error("not implemented in fake");
+  }
+
+  unsubscribeTerminal(): void {}
+
+  sendTerminalInput(): void {}
+
+  onTerminalStreamEvent(): () => void {
+    return () => undefined;
+  }
+
   // Property with an assertion because matching DaemonClient's `on` overload
   // set (including the DaemonEventHandler variant) is not worth it in a fake.
   readonly on = ((

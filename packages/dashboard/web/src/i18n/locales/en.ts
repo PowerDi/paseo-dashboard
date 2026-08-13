@@ -50,6 +50,19 @@ const en: typeof zhCN = {
       reasoning: "Reasoning",
       compaction: "Context compacted",
     },
+    view: {
+      timeline: "Timeline",
+      terminal: "Terminal",
+    },
+    terminal: {
+      attaching: "Attaching to terminal…",
+      exited: "Terminal exited",
+      error: "Terminal error: {{message}}",
+      create: "New terminal",
+      kill: "Kill terminal",
+      loading: "Loading terminals…",
+      empty: "No terminals yet. Create one with +.",
+    },
     meta: {
       provider: "Provider",
       directory: "Directory",

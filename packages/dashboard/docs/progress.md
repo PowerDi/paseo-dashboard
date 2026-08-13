@@ -9,8 +9,8 @@
 - **仓库**：Paseo monorepo fork — `git@github.com:PowerDi/paseo-dashboard.git`
 - **代码位置**：`/root/workspace/code/paseo/packages/dashboard/`
 - **Paseo 源码**：`/root/workspace/code/paseo/`（monorepo 根，作为行为事实来源）
-- **当前阶段**：M3 进行中。P3.1 完成 2/3（缺 feature gating）、P3.2 完成 2/3（缺 Agent 创建与恢复）、P3.3 的 Timeline 完成、Terminal 与大数据量处理未开始。
-- **当前分支**：`feat/dashboard-migration`（已推送到 origin，但 P3 的代码全部还在工作区未提交）
+- **当前阶段**：M3 进行中。P3.1 完成 2/3（缺 feature gating）、P3.2 完成 2/3（缺 Agent 创建与恢复）、P3.3 全部完成（Timeline + Terminal + 大数据量处理）。
+- **当前分支**：`feat/dashboard-migration`（P3.1-P3.3 已提交，见 Git 状态）
 
 ## Git 协作
 
@@ -67,6 +67,7 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 - [x] **P3.2 数据接线（读路径 + 认证）**：登录/注册页 + `app-store` 认证状态机（cookie bootstrap、401 全局登出）；`App.tsx` 接 `dashboardRuntime`（host 自动连接/断开、SSE 触发增量 sync）；侧栏树/Hosts/Agents/Workspace 用真实 Host→Project→Agent 数据（`lib/agent-tree.ts` 纯函数 + 单测）；Devices/Settings 接真实 API；Host 导入弹窗改为真实验证（relay 连接读 server_info 版本）+ importHost + sync；时间显示按 locale（`lib/format-time.ts`）。`*Prototype.tsx` 页面全部替换为 `*Page.tsx`。
 - [x] **P3.2 实时订阅 + Agent 操作（写路径）**：`DaemonClientLike` 扩展 `on`/`archiveAgent`/`cancelAgent`；runtime 连接后订阅 `agent_update`/`workspace_update`/`project.update` 推送进 `daemon-data-store`（upsert/remove reducer，未知 agent 无 placement 时回退全量刷新），重连（disconnected→connected）自动 `refreshHost` 补齐断线期间丢的事件；`runtime.archiveAgent/cancelAgent`（归档成功后本地立即标记，防广播延迟）；Agents 行 hover 与 Workspace 头部提供停止（running 时）/归档按钮，归档选中 agent 自动清除选择。**未做**：development-plan 的 P3.2 任务 2 还要求 Agent 创建与恢复，`createAgent`/`resumeAgent` 全代码库零处调用（client 侧两个方法都存在，`resumeAgent(handle, overrides?)` 才是「恢复」，client 没有 unarchive 方法）。创建入口依赖 prompt 输入，和 P3.4 一起做。
 - [x] **P3.3 Timeline（读 + 分页 + 实时）**：`stores/timeline-store.ts`（tail 页加载、`before` 向上分页、epoch/seq 切割合并、staleCursor 回退重拉、流事件节流刷新）+ 10 单测；`DaemonClientLike` 扩展 `fetchAgentTimeline`/`setAgentTimelineSubscription`；runtime `viewAgent/leaveAgent`（selective 订阅 + tail 加载）、`agent_stream` 转发；`useAgentTimeline` hook；`components/timeline.tsx` 渲染 user/assistant/reasoning（折叠）/tool_call（摘要行 + output/diff 折叠）/todo/error/compaction；Workspace 自动滚底（用户上翻时不打扰）。
+- [x] **P3.3 Terminal + 大数据量处理**：`paseo/terminalSession.ts`（订阅 binary stream、output/restore/snapshot 路由、resize claim→update intent、`terminal_stream_exit`、restore 走 `features["terminal-restore-modes"]` gate）+ 8 单测；`DaemonClientLike` 扩展 7 个 terminal 方法；runtime `listTerminals`/`createTerminal`/`killTerminal`/`openTerminal`；`components/terminal-view.tsx`（`@xterm/xterm` + fit addon，snapshot 经 `renderTerminalSnapshotToAnsi` 重放）+ `components/workspace-terminal.tsx`（终端 tab 列表、创建/结束）；Workspace 头部 Timeline/Terminal 切换。大数据量：timeline-store 每 agent 500 条内存上限（裁掉的历史经 `startCursor` 回翻，1 单测）+ timeline 条目 `content-visibility: auto` 渲染上限。Playwright 实测：登录 → 打开会话 → Terminal tab → 创建终端 → `echo` 命令实时回显 → 结束终端全链路通过。
 
 ### 迁移变更记录
 
@@ -82,25 +83,19 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 
 ### Git 状态（2026-08-13）
 
-`feat/dashboard-migration` 上 dashboard 相关 commit 共 3 个，最新的是 `ba416a892`「P2: 多设备登录与 Host 同步」（服务端 devices/sessions/audit/events/security + sync 增量、contract 测试、`api/dashboardApi.ts`、`stores/host-sync-store.ts`），之前是 `3f5221c1a`（progress 更新）和 `3b0ca1c03`（迁移）。**P3.1/P3.2/P3.3 和 UI/i18n 的全部产出都还在工作区，没有提交**：
-
-- 已改：`web/src/App.tsx`、`App.css`、`main.tsx`、`api/dashboardApi.ts`、`paseo/connectionManager.ts(.test)`、`web/package.json`（加 tailwind4/CVA/lucide/i18next）、`web/tsconfig.json`（加 `@/*` paths）、`web/vite.config.ts`、`server/src/lib/event-bus.ts`、`server/src/routes/events.ts`、`tests/contract/src/server-events.test.ts`、`AGENTS.md`。
-- 新增未跟踪：`web/src/{components,hooks,i18n,layouts,lib,pages}/`、`globals.css`、`api/dashboardEvents.ts(.test)`、`api/dashboardApi.test.ts`、`paseo/dashboardRuntime.ts(.test)`、`stores/{app-store,daemon-data-store,timeline-store}.ts` 及各自单测。`stores/host-sync-store.ts` 是 P2 已提交的文件，不在未跟踪列表里。
-
-接续时先确认这些改动是否还在，再决定是提交还是继续开发。
+`feat/dashboard-migration` 上 dashboard 相关 commit：`4cd5f2667`「P3: Connection Manager、Agent 面板与 Timeline」（P3.1/P3.2/P3.3 Timeline + UI/i18n 全部产出，57 文件）、`ba416a892`「P2: 多设备登录与 Host 同步」、`3f5221c1a`（progress 更新）、`3b0ca1c03`（迁移）。P3.3 Terminal + 大数据量处理在其后的 commit（见修改记录）。
 
 ### 待开始
 
-按依赖排序。1-4 阻塞 M3 退出，5 是 M1/M2 被跳过的历史缺口（服务端做了、Web 端没接）。
+按依赖排序。1-3 阻塞 M3 退出，4 是 M1/M2 被跳过的历史缺口（服务端做了、Web 端没接）。
 
-1. **P3.3 Terminal**（当前优先）— 用 daemon binary frame 规则实现 Web terminal（参考 Paseo `docs/terminal-performance.md`）。client 侧已有全套方法：`subscribeTerminal`/`unsubscribeTerminal`/`listTerminals`/`createTerminal`/`killTerminal`/`sendTerminalInput`/`onTerminalStreamEvent`，需加进 `DaemonClientLike` 的 `Pick<>`。同时补 P3.3 剩下的「大数据量处理」：虚拟滚动 + 条目内存上限（Timeline 现在两者都没有）。
-2. **P3.4 Prompt 与权限请求** — composer 目前 `disabled` 占位（i18n key `workspace.composerUnavailable` 文案还写着「将在时间线接入后开放」，已过期）。要接 `client.sendMessage`/`sendAgentMessage`、`createAgent` 与 `resumeAgent`（P3.2 任务 2 遗留，创建和恢复入口都不存在）、权限请求展示与 `respondToPermission`。权限数据有两条来源：agent 快照的 `pendingPermissions`（现在只在 Workspace 头部显示计数）和 `agent_stream` 的 `permission_requested`/`permission_resolved` 事件（timeline-store 只用来触发 tail 重拉，没有渲染）。注意 `AgentTimelineItem` union 里没有权限类型，权限不是 timeline 条目。
-3. **P3.1 收尾 + feature gating** — `server_info.features.*` 一次性 gating 目前零处使用，`getLastServerInfoMessage()` 只被 import 流程用来读 `version`。这是 P3.1 的退出条件，也是 P3.5 的前置。
-4. **P3.5 兼容性测试** — daemon 版本矩阵 smoke tests。
+1. **P3.4 Prompt 与权限请求**（当前优先）— composer 目前 `disabled` 占位（i18n key `workspace.composerUnavailable` 文案还写着「将在时间线接入后开放」，已过期）。要接 `client.sendMessage`/`sendAgentMessage`、`createAgent` 与 `resumeAgent`（P3.2 任务 2 遗留，创建和恢复入口都不存在）、权限请求展示与 `respondToPermission`。权限数据有两条来源：agent 快照的 `pendingPermissions`（现在只在 Workspace 头部显示计数）和 `agent_stream` 的 `permission_requested`/`permission_resolved` 事件（timeline-store 只用来触发 tail 重拉，没有渲染）。注意 `AgentTimelineItem` union 里没有权限类型，权限不是 timeline 条目。
+2. **P3.1 收尾 + feature gating** — `server_info.features.*` 一次性 gating。`terminalSession.ts` 已用 `features["terminal-restore-modes"]` gate restore 模式（带 COMPAT 注释），是第一个使用点；其余功能仍零 gating，`getLastServerInfoMessage()` 在 import 流程只读 `version`。这是 P3.1 的退出条件，也是 P3.5 的前置。
+3. **P3.5 兼容性测试** — daemon 版本矩阵 smoke tests。
    另有 `roadmap.md` M3 范围里的「路由」未做（见下面「Web 数据接线」的路由说明），要不要在 M3 内补取决于是否需要深链。
-5. **P3.6 历史 Web 缺口补齐** — 服务端路由已实现、Web 端完全没接的四项：`POST /auth/change-password`（P1.1 记为完成，但没有页面和 client 方法）、`PATCH /hosts/:id` 改名（P1.2 的乐观并发 409 路径 Web 端从未调用过）、`GET /audit-events`（P2.4 完成，产品需求里「审计记录」是独立页面）、`GET /me`（`app-store` 现在用 localStorage 缓存 user，刷新后靠缓存显示邮箱，有 `/me` 可以直接取）。另加 SSE 重连：server 已发 `id:` 并支持 `Last-Event-ID`，`dashboardEvents.ts` 能解析 id 但从不回传，也没有重连循环——流断掉（代理超时/网络抖动）后 Host 配置更新静默停止，直到用户刷新页面。以及把 web 单测接进 npm 脚本和 CI（见下面测试统计）。development-plan.md 已补 P3.6 小节。
-6. Timeline 后续优化（记录，不阻塞）：流式期间靠节流 tail 重拉（400ms/次，limit 50），未做增量 stream reducer；「加载更早」是按钮而非滚动哨兵。
-7. 后续见 docs/development-plan.md 的完整序列。
+4. **P3.6 历史 Web 缺口补齐** — 服务端路由已实现、Web 端完全没接的四项：`POST /auth/change-password`（P1.1 记为完成，但没有页面和 client 方法）、`PATCH /hosts/:id` 改名（P1.2 的乐观并发 409 路径 Web 端从未调用过）、`GET /audit-events`（P2.4 完成，产品需求里「审计记录」是独立页面）、`GET /me`（`app-store` 现在用 localStorage 缓存 user，刷新后靠缓存显示邮箱，有 `/me` 可以直接取）。另加 SSE 重连：server 已发 `id:` 并支持 `Last-Event-ID`，`dashboardEvents.ts` 能解析 id 但从不回传，也没有重连循环——流断掉（代理超时/网络抖动）后 Host 配置更新静默停止，直到用户刷新页面。以及把 web 单测接进 npm 脚本和 CI（见下面测试统计）。development-plan.md 已补 P3.6 小节。
+5. Timeline 后续优化（记录，不阻塞）：流式期间靠节流 tail 重拉（400ms/次，limit 50），未做增量 stream reducer；「加载更早」是按钮而非滚动哨兵。
+6. 后续见 docs/development-plan.md 的完整序列。
 
 ## 关键约束（回答问题时必须遵守）
 
@@ -214,7 +209,8 @@ npm run typecheck:dashboard
 - 实时数据：`dashboardRuntime` 连接后通过 `client.on("agent_update"/"workspace_update"/"project.update")` 把推送写进 `daemon-data-store` 的 apply reducer；重连时 `refreshHost` 兜底。测试里 mock `DaemonClient["on"]` 重载集很难精确实现（`DaemonEventHandler` 变体的事件 union 与 `SessionOutboundMessage` 不同），fake 用属性 + `as DaemonClientLike["on"]` 断言。
 - Timeline：daemon 的 live `agent_stream` 可能是 delta 形态，dashboard 不做增量 reducer——`timeline-store` 收到流事件后节流重拉 tail 页，用页首 `seqStart` 切割合并（同 epoch 且重叠/相邻时保留更早历史，daemon 投影替换重叠后缀）。语义依据见 Paseo `docs/timeline-sync.md`。`sourceSeqRanges` 字段是 `startSeq/endSeq`。
 - **权限不是 timeline 条目**：`AgentTimelineItem` 的 union 只有 7 种（user_message / assistant_message / reasoning / tool_call / todo / error / compaction），`components/timeline.tsx` 全部渲染了，覆盖完整。权限走两条独立通道：agent 快照的 `pendingPermissions` 数组，和 `agent_stream` 的 `permission_requested`/`permission_resolved` 事件（在 `timeline-store` 的 `REFRESH_EVENT_TYPES` 里只用来触发 tail 重拉）。做 P3.4 时不要去扩 timeline item 类型。
-- `DaemonClientLike` 是 `Pick<DaemonClient, ...>`（`paseo/connectionManager.ts:13`），当前只挑了 10 个方法。加新 daemon 能力先往这个 Pick 里加名字，不要在页面里绕过 connection manager 直接摸 `DaemonClient`。
+- `DaemonClientLike` 是 `Pick<DaemonClient, ...>`（`paseo/connectionManager.ts:13`）。加新 daemon 能力先往这个 Pick 里加名字，不要在页面里绕过 connection manager 直接摸 `DaemonClient`。
+- **Terminal**：`paseo/terminalSession.ts` 是唯一的终端流处理层——订阅 `onTerminalStreamEvent`（按 terminalId 过滤 output/restore/snapshot）、`terminal_stream_exit`、resize intent（attach 时 claim、之后 update，语义见 Paseo `docs/terminal-performance.md`）。restore 模式经 `features["terminal-restore-modes"]` gate（COMPAT 注释在代码里）；无 feature 的旧 daemon 会送 snapshot 帧，`terminal-view.tsx` 用 `renderTerminalSnapshotToAnsi`（`@getpaseo/protocol/terminal-snapshot`）reset+重放进 xterm。xterm 的 `fontFamily` 不解析 CSS 变量，要写完整字体栈。终端是 per-cwd 的（`listTerminals(cwd, …, { workspaceId })`），Workspace 页用 `agent.cwd`/`agent.workspaceId`。
 
 ### Web UI 与 i18n
 
@@ -226,8 +222,8 @@ npm run typecheck:dashboard
 
 ### 测试统计
 
-- web 单测 **62**（8 文件：dashboardApi 1、dashboardEvents 4、connectionManager 7、dashboardRuntime 12、daemon-data-store 12、timeline-store 10、app-store 7、agent-tree 9）。2026-08-13 实跑 8 文件 62 通过。
-- contract **79**（server-auth 16、server-security 14、server-events 14、server-hosts 13、server-sync 8、server-devices-sessions 9、auth 2、host-sync 3）+ e2e vitest **8**（connection-manager 4、offer-parser 3、placeholder 1）= 静态统计 **149** 含 web。
+- web 单测 **71**（9 文件：dashboardApi 1、dashboardEvents 4、connectionManager 7、dashboardRuntime 12、daemon-data-store 12、timeline-store 11、terminalSession 8、app-store 7、agent-tree 9）。2026-08-13 实跑 9 文件 71 通过。
+- contract **79**（server-auth 16、server-security 14、server-events 14、server-hosts 13、server-sync 8、server-devices-sessions 9、auth 2、host-sync 3）+ e2e vitest **8**（connection-manager 4、offer-parser 3、placeholder 1）= 静态统计 **158** 含 web。
 - Playwright 浏览器 E2E 3 测试（需 `PLAYWRIGHT_BROWSERS_PATH=/tmp/playwright-browsers`）。
 - **web 单测没有被任何 npm 脚本覆盖**：`web/package.json` 没有 `test` 脚本，`test:dashboard` 只跑 contract 和 e2e 两个 workspace。跑 web 单测要从根目录显式给路径：`npx vitest run packages/dashboard/web/src`（根 `vitest.config.ts` 把 `@` 别名指向 `packages/app/src`，所以 web 测试文件一律用相对路径 import，不要写 `@/`）。
 - **CI 完全不跑 dashboard 测试**：`.github/workflows/ci.yml` 的测试 job 都是 `npm run test --workspace=<pkg>` 点名指定，没有 dashboard。根 `npm run typecheck`/`lint`/`format:check` 是 `--workspaces`，这三项覆盖到了。
@@ -270,3 +266,4 @@ npm run typecheck:dashboard
 | 2026-08-13 | Claude           | P3.2 收尾：daemon 实时推送订阅（agent/workspace/project update 进 store + 重连刷新）+ Agent 停止/归档写路径（Agents 行操作 + Workspace 头部操作）；28 定向单测 + typecheck/lint/format 通过；Playwright 验证操作按钮渲染                                                                                                                                                                                                                                                                                                                 |
 | 2026-08-13 | Claude           | P3.3 Timeline：timeline-store（tail/向上分页/epoch-seq 合并/流事件节流刷新）+ viewAgent selective 订阅 + Workspace 时间线渲染（全部 item 类型、自动滚底、加载更早）；39 定向单测 + typecheck/lint/format 通过；Playwright 验证真实会话历史与分页                                                                                                                                                                                                                                                                                         |
 | 2026-08-13 | Claude           | 按仓库实际代码校准计划：当前阶段改为「M3 进行中」；补 P3.1 条目并标注 feature gating 未做；待开始重排为 Terminal → Prompt/权限 → P3.1 收尾 → P3.5 → 新增 P3.6 历史 Web 缺口（change-password / host 改名 / 审计页 / `/me` / SSE 重连）；测试统计改为实际值（web 62 实跑、contract 79、e2e 8）并记录 web 单测不在任何 npm 脚本内、CI 不跑 dashboard；补路由现状、权限非 timeline 条目、`DaemonClientLike` Pick 三条技术要点；同步校准 development-plan.md 的 P3（逐条标完成/未做，P3.3 拆出 Terminal 与大数据量，新增 P3.6 小节与依赖图） |
+| 2026-08-13 | Fable            | 提交 P3.1-P3.3 工作区产出（`4cd5f2667`）。P3.3 Terminal：terminalSession（binary stream 订阅、resize claim/update、restore feature gate）+ xterm 视图 + Workspace 终端面板与 Timeline/Terminal 切换 + runtime terminal API；大数据量：timeline-store 500 条内存上限 + 条目 `content-visibility`；web 单测 62→71；typecheck/lint/format/build 通过；Playwright 实测真实 daemon 终端创建/输入/回显/结束全链路                                                                                                                              |

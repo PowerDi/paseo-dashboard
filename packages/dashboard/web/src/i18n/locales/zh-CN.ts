@@ -48,6 +48,19 @@ export default {
       reasoning: "思考过程",
       compaction: "上下文已压缩",
     },
+    view: {
+      timeline: "时间线",
+      terminal: "终端",
+    },
+    terminal: {
+      attaching: "连接终端中…",
+      exited: "终端已退出",
+      error: "终端错误：{{message}}",
+      create: "新建终端",
+      kill: "结束终端",
+      loading: "加载终端中…",
+      empty: "还没有终端。点击 + 新建一个。",
+    },
     meta: {
       provider: "提供方",
       directory: "目录",
