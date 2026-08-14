@@ -23,4 +23,10 @@ export default defineConfig({
       },
     },
   },
+  test: {
+    // The repo-root vitest config points "@" at packages/app/src, so web tests
+    // have to run against this config to resolve their own alias.
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    environment: "node",
+  },
 });

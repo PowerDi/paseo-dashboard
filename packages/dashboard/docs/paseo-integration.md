@@ -128,7 +128,7 @@ interface PaseoConnectionManager {
 | 权限请求               | 订阅并响应 daemon 权限消息                                    |
 | Terminal               | 使用现有 daemon binary frame 规则，自行实现 Web terminal 页面 |
 
-前期可以先做到功能可用，不要求视觉一致。后期页面重构不应影响底层 daemon 连接测试。
+前期按功能可用落地。视觉与交互以 [`docs/ui.md`](./ui.md) 为准（参照 Zeno desktop，不参照 Paseo App）。页面重构不得影响底层 daemon 连接测试。
 
 ## 兼容策略
 

@@ -20,30 +20,30 @@
 
 ### 按目录选择
 
-| 修改位置              | 开发前必须阅读                                                                                          | 重点                                                                        |
-| --------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `web/`                | `docs/product-requirements.md`、`docs/architecture.md`、`docs/paseo-integration.md`                     | 页面目标、Web 与 Dashboard API/daemon 的两条连接、官方 client/protocol 用法 |
-| `harmony/`            | `docs/product-requirements.md`、`docs/architecture.md`、`docs/paseo-integration.md`、`docs/security.md` | 与 Web 共用 API、Harmony 平台适配、安全存储、Relay 兼容要求                 |
-| `server/`             | `docs/architecture.md`、`docs/security.md`、`docs/product-requirements.md`                              | User/Session/Device/Host 数据、API、加密、审计；禁止进入 daemon 数据面      |
-| `packages/contracts/` | `docs/architecture.md`、`docs/product-requirements.md`、`docs/security.md`                              | API 请求/响应、错误 code、Host sync、敏感字段边界                           |
-| `tests/contract/`     | `docs/architecture.md`、`docs/product-requirements.md`                                                  | Web/Harmony/Server 对同一 API 的一致理解                                    |
-| `tests/e2e/`          | `docs/product-requirements.md`、`docs/security.md`、`docs/roadmap.md`                                   | 用户流程、验收标准、数据路径和泄露检查                                      |
-| `docs/`               | 先读要修改主题的现有文档，再读 `docs/open-decisions.md`                                                 | 修改原有结论，不在多个文档重复同一事实                                      |
+| 修改位置              | 开发前必须阅读                                                                                          | 重点                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `web/`                | `docs/product-requirements.md`、`docs/architecture.md`、`docs/paseo-integration.md`、`docs/ui.md`       | 页面目标、Web 与 Dashboard API/daemon 的两条连接、官方 client/protocol 用法、视觉与交互 |
+| `harmony/`            | `docs/product-requirements.md`、`docs/architecture.md`、`docs/paseo-integration.md`、`docs/security.md` | 与 Web 共用 API、Harmony 平台适配、安全存储、Relay 兼容要求                             |
+| `server/`             | `docs/architecture.md`、`docs/security.md`、`docs/product-requirements.md`                              | User/Session/Device/Host 数据、API、加密、审计；禁止进入 daemon 数据面                  |
+| `packages/contracts/` | `docs/architecture.md`、`docs/product-requirements.md`、`docs/security.md`                              | API 请求/响应、错误 code、Host sync、敏感字段边界                                       |
+| `tests/contract/`     | `docs/architecture.md`、`docs/product-requirements.md`                                                  | Web/Harmony/Server 对同一 API 的一致理解                                                |
+| `tests/e2e/`          | `docs/product-requirements.md`、`docs/security.md`、`docs/roadmap.md`                                   | 用户流程、验收标准、数据路径和泄露检查                                                  |
+| `docs/`               | 先读要修改主题的现有文档，再读 `docs/open-decisions.md`                                                 | 修改原有结论，不在多个文档重复同一事实                                                  |
 
 ### 按功能追加阅读
 
-| 功能                                           | 额外必须阅读                                                                                                                                      |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 注册、登录、密码、session、设备、账户删除      | `docs/security.md` 的认证、撤销和删除部分；`docs/architecture.md` 的 User/Device/Session 模型与认证 API                                           |
-| Host 导入、扫码、pairing、Host sync、删除 Host | `docs/product-requirements.md` 的用户流程；`docs/architecture.md` 的 Host 数据模型和同步 API；`docs/security.md` 的 Pairing capability 与存储加密 |
-| Web/Harmony 连接 Relay 或 daemon               | `docs/paseo-integration.md`；`docs/security.md` 的信任边界；Paseo 的 `docs/protocol-compatibility.md`                                             |
-| 修改 daemon 消息解析或新增 daemon 功能         | Paseo 的 `docs/protocol-compatibility.md`、`docs/protocol-validation.md` 和真实 protocol/client 源码                                              |
-| Agent、Project、Workspace、权限处理            | `docs/product-requirements.md`、`docs/paseo-integration.md`；再定位 Paseo 中对应 client/protocol 实现，不参考 Paseo App 页面结构作为架构          |
-| Timeline 和实时 agent 输出                     | Paseo 的 `docs/timeline-sync.md`、`docs/protocol-compatibility.md` 和对应 client 源码                                                             |
-| Terminal                                       | Paseo 的 `docs/terminal-performance.md`、`docs/protocol-compatibility.md` 和对应 binary frame/client 源码                                         |
-| Relay E2EE 或 pairing key 轮换                 | `docs/security.md`、`docs/paseo-integration.md`、Paseo `SECURITY.md` 和 Relay/server 的真实实现                                                   |
-| 选择框架、数据库或处理未决架构                 | `docs/open-decisions.md`；做出决定后更新拥有该事实的主题文档                                                                                      |
-| 规划开发阶段或判断功能是否进入当前版本         | `docs/roadmap.md` 和 `docs/product-requirements.md` 的目标/非目标                                                                                 |
+| 功能                                           | 额外必须阅读                                                                                                                                           |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 注册、登录、密码、session、设备、账户删除      | `docs/security.md` 的认证、撤销和删除部分；`docs/architecture.md` 的 User/Device/Session 模型与认证 API                                                |
+| Host 导入、扫码、pairing、Host sync、删除 Host | `docs/product-requirements.md` 的用户流程；`docs/architecture.md` 的 Host 数据模型和同步 API；`docs/security.md` 的 Pairing capability 与存储加密      |
+| Web/Harmony 连接 Relay 或 daemon               | `docs/paseo-integration.md`；`docs/security.md` 的信任边界；Paseo 的 `docs/protocol-compatibility.md`                                                  |
+| 修改 daemon 消息解析或新增 daemon 功能         | Paseo 的 `docs/protocol-compatibility.md`、`docs/protocol-validation.md` 和真实 protocol/client 源码                                                   |
+| Agent、Project、Workspace、权限处理            | `docs/product-requirements.md`、`docs/paseo-integration.md`、`docs/ui.md`；再定位 Paseo 中对应 client/protocol 实现，不参考 Paseo App 页面结构作为架构 |
+| Timeline 和实时 agent 输出                     | Paseo 的 `docs/timeline-sync.md`、`docs/protocol-compatibility.md` 和对应 client 源码；Web 展示读 `docs/ui.md`                                         |
+| Terminal                                       | Paseo 的 `docs/terminal-performance.md`、`docs/protocol-compatibility.md` 和对应 binary frame/client 源码                                              |
+| Relay E2EE 或 pairing key 轮换                 | `docs/security.md`、`docs/paseo-integration.md`、Paseo `SECURITY.md` 和 Relay/server 的真实实现                                                        |
+| 选择框架、数据库或处理未决架构                 | `docs/open-decisions.md`；做出决定后更新拥有该事实的主题文档                                                                                           |
+| 规划开发阶段或判断功能是否进入当前版本         | `docs/roadmap.md` 和 `docs/product-requirements.md` 的目标/非目标                                                                                      |
 
 ### 文档优先级
 
@@ -121,7 +121,7 @@ Paseo 行为事实若与本项目文档冲突，以 Paseo 真实源码为准，�
 - 分层保持：Dashboard API/identity、Host vault/sync、Paseo client runtime、UI。
 - Dashboard API 调用与 daemon client 调用必须放在不同模块；服务端不得导入 daemon client。
 - 页面不得直接到处创建 `DaemonClient`，统一通过项目内 connection manager。
-- 前期按功能平移，不按 Paseo App 文件结构复制；后期页面可独立重构。
+- 前期按功能平移，不按 Paseo App 文件结构复制；后期页面可独立重构。Web 视觉与交互以 `docs/ui.md` 为准（参照 Zeno desktop，不参照 Paseo App）。
 - agent 数据不得进入 Dashboard 后端、数据库、队列、缓存或日志。
 - 所有安全相关行为都要有负向测试：越权、撤销、重放、日志泄露、缓存泄露和并发冲突。
 - 不在未更新对应文档的情况下改变上述边界。
