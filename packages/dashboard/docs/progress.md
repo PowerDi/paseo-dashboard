@@ -10,7 +10,7 @@
 - **代码位置**：`/root/workspace/code/paseo/packages/dashboard/`
 - **Paseo 源码**：`/root/workspace/code/paseo/`（monorepo 根，作为行为事实来源）
 - **当前阶段**：M3 进行中。P3.1-P3.4 全部完成。P3.6 历史 Web 缺口补齐已完成（GET /me、SSE 重连、Host 改名、修改密码、审计页面）。
-- **当前分支**：`feat/dashboard-migration`（P3.1-P3.3 已提交，见 Git 状态）
+- **当前分支**：`feat/dashboard-migration`（P3.1-P3.4 + P3.6 + Timeline 滚动哨兵已提交，commit `4638617ce`，已推送 origin）
 
 ## Git 协作
 
