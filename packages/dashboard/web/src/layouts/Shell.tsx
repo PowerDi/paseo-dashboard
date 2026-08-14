@@ -16,6 +16,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { SessionStatusMarker } from "@/components/session-status-marker";
 import type { HostPresence, SidebarHostNode, SidebarSessionNode } from "@/lib/agent-tree";
 import { cn } from "@/lib/utils";
 
@@ -41,12 +42,6 @@ const secondaryNav: { id: Page; labelKey: "hosts" | "agents" | "devices"; icon: 
 function presenceColor(presence: HostPresence): string {
   if (presence === "online") return "var(--success)";
   if (presence === "connecting") return "var(--warning)";
-  return "var(--foreground-faint)";
-}
-
-function sessionColor(status: SidebarSessionNode["status"]): string {
-  if (status === "running") return "var(--success)";
-  if (status === "error") return "var(--danger)";
   return "var(--foreground-faint)";
 }
 
@@ -218,13 +213,9 @@ export function Shell({
                                       )}
                                       onClick={() => onSelectSession(session)}
                                     >
-                                      <span
-                                        className={cn(
-                                          "dashboard-status-dot",
-                                          session.status === "running" && "status-dot-pulse",
-                                        )}
-                                        aria-label={session.status}
-                                        style={{ background: sessionColor(session.status) }}
+                                      <SessionStatusMarker
+                                        status={session.status}
+                                        label={t(`agents.status.${session.status}`)}
                                       />
                                       <span className="tree-label">
                                         {session.title ?? t("nav.untitledSession")}
@@ -244,8 +235,10 @@ export function Shell({
             </div>
           </section>
 
-          <button className="dashboard-nav-item mt-3" onClick={onAddHost}>
-            <Plus size={16} />
+          <button className="dashboard-sidebar-action" onClick={onAddHost}>
+            <span className="dashboard-sidebar-action-icon" aria-hidden="true">
+              <Plus size={13} />
+            </span>
             <span>{t("nav.addHost")}</span>
           </button>
         </div>

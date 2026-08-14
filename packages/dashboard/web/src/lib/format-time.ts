@@ -21,6 +21,18 @@ export function formatRelativeTime(iso: string, locale: string, now = Date.now()
   return iso;
 }
 
+/** Compact running-turn counter: "8s", "1:04", "1:02:03". */
+export function formatElapsed(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const seconds = totalSeconds % 60;
+  const minutes = Math.floor(totalSeconds / 60) % 60;
+  const hours = Math.floor(totalSeconds / 3600);
+  if (totalSeconds < 60) return `${seconds}s`;
+  const paddedSeconds = String(seconds).padStart(2, "0");
+  if (hours === 0) return `${minutes}:${paddedSeconds}`;
+  return `${hours}:${String(minutes).padStart(2, "0")}:${paddedSeconds}`;
+}
+
 export function formatDateTime(iso: string, locale: string): string {
   const timestamp = Date.parse(iso);
   if (Number.isNaN(timestamp)) return iso;

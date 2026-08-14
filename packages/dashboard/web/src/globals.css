@@ -127,69 +127,78 @@
   --dur-slow: 700ms;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+/*
+ * These element resets MUST stay inside @layer base. Unlayered CSS wins over
+ * every cascade layer regardless of specificity, so an unlayered `* { margin:
+ * 0; padding: 0 }` silently kills every Tailwind spacing utility in the app
+ * (p-*, m-*, and the margin-based space-y-*). Component classes in App.css are
+ * intentionally unlayered — they are supposed to beat utilities.
+ */
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
-html,
-body,
-#root {
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-}
+  html,
+  body,
+  #root {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+  }
 
-body {
-  overflow: hidden;
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans);
-  font-size: var(--ui-font-size);
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
+  body {
+    overflow: hidden;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: var(--ui-font-size);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
 
-button,
-input,
-textarea {
-  font: inherit;
-}
+  button,
+  input,
+  textarea {
+    font: inherit;
+  }
 
-button {
-  border: 0;
-}
+  button {
+    border: 0;
+  }
 
-input,
-textarea {
-  color: inherit;
-}
+  input,
+  textarea {
+    color: inherit;
+  }
 
-::selection {
-  background: rgb(242 242 240 / 20%);
-}
+  ::selection {
+    background: rgb(242 242 240 / 20%);
+  }
 
-::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
-}
+  ::-webkit-scrollbar {
+    width: 7px;
+    height: 7px;
+  }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
 
-::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: 999px;
-  background: #3a3a3a;
-  background-clip: padding-box;
-}
+  ::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: #3a3a3a;
+    background-clip: padding-box;
+  }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #555555;
-  background-clip: padding-box;
+  ::-webkit-scrollbar-thumb:hover {
+    background: #555555;
+    background-clip: padding-box;
+  }
 }
 
 /* Motion */
@@ -339,8 +348,17 @@ textarea {
   .workspace-header,
   .dashboard-page-enter,
   .shimmer-text,
-  .status-dot-pulse::after {
+  .status-dot-pulse::after,
+  .timeline-live-dot,
+  .workspace-scroll-bottom {
     animation: none !important;
+  }
+
+  /* Without the sweep the clipped gradient would leave the text invisible. */
+  .shimmer-text {
+    background-image: none;
+    -webkit-text-fill-color: var(--foreground-muted);
+    color: var(--foreground-muted);
   }
 
   .collapsible,
@@ -354,8 +372,9 @@ textarea {
   .dashboard-tree-row,
   .thread-tool,
   .thread-task-row,
-  .workspace-composer-input,
-  .workspace-composer-send {
+  .composer-card,
+  .composer-chip,
+  .composer-send {
     transition: none !important;
   }
 }

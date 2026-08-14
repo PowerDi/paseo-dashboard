@@ -39,10 +39,12 @@ const en: typeof zhCN = {
     emptyTitle: "Start a session",
     emptySubtitle: "Pick a session from the sidebar, or add a host first.",
     composerAria: "Message composer",
-    composerPlaceholder: "Send a message. Enter to send, Shift+Enter for a new line",
+    composerPlaceholder: "Message this session…",
     messageInputAria: "Message input",
     send: "Send message",
     sendFailed: "Failed to send: {{message}}",
+    submitHint: "Enter to send · Shift+Enter for a new line",
+    scrollToBottom: "Jump to latest",
     newSession: {
       projectAria: "Select project",
       providerAria: "Select provider",
@@ -65,6 +67,8 @@ const en: typeof zhCN = {
       compaction: "Context compacted",
       codeCopy: "Copy code",
       codeCopied: "Copied",
+      replying: "Replying…",
+      runningTool: "Running {{detail}}",
     },
     view: {
       timeline: "Timeline",

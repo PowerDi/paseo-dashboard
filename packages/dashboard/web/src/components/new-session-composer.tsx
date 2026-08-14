@@ -1,8 +1,9 @@
 import type { Host } from "@getpaseo/dashboard-shared";
 import { AGENT_PROVIDER_DEFINITIONS } from "@getpaseo/protocol/provider-manifest";
-import { ArrowUp, Folder, LoaderCircle } from "lucide-react";
+import { Folder } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ComposerField, ComposerSendButton, ComposerShell } from "@/components/composer-shell";
 import {
   Select,
   SelectContent,
@@ -31,8 +32,7 @@ const PROVIDERS = AGENT_PROVIDER_DEFINITIONS.filter(
   (definition) => definition.enabledByDefault !== false,
 );
 
-const TRIGGER_CLASS =
-  "h-7 gap-1.5 border-[var(--border-subtle)] bg-[var(--surface-soft)] px-2 text-[12px] text-[var(--foreground-muted)] shadow-none";
+const CHIP_CLASS = "composer-chip";
 
 export function NewSessionComposer({ hosts, runtimes, onCreated }: NewSessionComposerProps) {
   const { t } = useTranslation();
@@ -84,74 +84,76 @@ export function NewSessionComposer({ hosts, runtimes, onCreated }: NewSessionCom
   }
 
   return (
-    <footer className="workspace-composer" aria-label={t("workspace.composerAria")}>
-      <div className="flex items-center gap-2">
-        <Select
-          value={selectedProject?.key ?? ""}
-          disabled={projectOptions.length === 0 || creating}
-          onValueChange={setProjectKey}
-        >
-          <SelectTrigger
-            size="sm"
-            className={`${TRIGGER_CLASS} max-w-64`}
-            aria-label={t("workspace.newSession.projectAria")}
+    <ComposerShell
+      label={t("workspace.composerAria")}
+      bar={
+        <>
+          <Select
+            value={selectedProject?.key ?? ""}
+            disabled={projectOptions.length === 0 || creating}
+            onValueChange={setProjectKey}
           >
-            <Folder size={13} className="shrink-0 opacity-70" />
-            <SelectValue placeholder={t("workspace.newSession.noProjects")} />
-          </SelectTrigger>
-          <SelectContent position="popper" align="start" side="top" sideOffset={6}>
-            {projectOptions.map((option) => (
-              <SelectItem key={option.key} value={option.key}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={provider} disabled={creating} onValueChange={setProvider}>
-          <SelectTrigger
-            size="sm"
-            className={TRIGGER_CLASS}
-            aria-label={t("workspace.newSession.providerAria")}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent position="popper" align="start" side="top" sideOffset={6}>
-            {PROVIDERS.map((definition) => (
-              <SelectItem key={definition.id} value={definition.id}>
-                {definition.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {error && (
-          <span className="truncate text-[12px] text-[var(--danger)]" role="alert">
+            <SelectTrigger
+              size="sm"
+              className={CHIP_CLASS}
+              aria-label={t("workspace.newSession.projectAria")}
+            >
+              <Folder size={13} className="shrink-0 opacity-70" />
+              <SelectValue placeholder={t("workspace.newSession.noProjects")} />
+            </SelectTrigger>
+            <SelectContent position="popper" align="start" side="top" sideOffset={6}>
+              {projectOptions.map((option) => (
+                <SelectItem key={option.key} value={option.key}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={provider} disabled={creating} onValueChange={setProvider}>
+            <SelectTrigger
+              size="sm"
+              className={CHIP_CLASS}
+              aria-label={t("workspace.newSession.providerAria")}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper" align="start" side="top" sideOffset={6}>
+              {PROVIDERS.map((definition) => (
+                <SelectItem key={definition.id} value={definition.id}>
+                  {definition.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </>
+      }
+      hint={
+        error ? (
+          <span className="text-[var(--danger)]" role="alert">
             {error}
           </span>
-        )}
-      </div>
-      <div className="workspace-composer-input">
-        <textarea
-          ref={promptRef}
-          aria-label={t("workspace.messageInputAria")}
-          placeholder={t("workspace.newSession.promptPlaceholder")}
-          value={prompt}
-          disabled={creating}
-          onChange={(event) => setPrompt(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || event.shiftKey) return;
-            event.preventDefault();
-            void create();
-          }}
-        />
-        <button
-          className="workspace-composer-send"
-          aria-label={t("workspace.newSession.create")}
+        ) : (
+          t("workspace.submitHint")
+        )
+      }
+      actions={
+        <ComposerSendButton
+          label={t("workspace.newSession.create")}
+          busy={creating}
           disabled={!canSend}
           onClick={() => void create()}
-        >
-          {creating ? <LoaderCircle size={15} className="animate-spin" /> : <ArrowUp size={17} />}
-        </button>
-      </div>
-    </footer>
+        />
+      }
+    >
+      <ComposerField
+        ref={promptRef}
+        label={t("workspace.messageInputAria")}
+        placeholder={t("workspace.newSession.promptPlaceholder")}
+        value={prompt}
+        disabled={creating}
+        onChange={setPrompt}
+        onSubmit={() => void create()}
+      />
+    </ComposerShell>
   );
 }

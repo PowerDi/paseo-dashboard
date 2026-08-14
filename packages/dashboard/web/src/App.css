@@ -153,6 +153,55 @@
   font-weight: var(--font-weight-medium);
 }
 
+/*
+ * Secondary action under the tree. Reads as an action rather than another nav
+ * row: separated by a rule, quieter label, icon in its own bounded square so
+ * the glyph and the text keep a fixed rail instead of butting together.
+ */
+.dashboard-sidebar-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 32px;
+  margin-top: 14px;
+  padding: 0 10px 0 8px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--foreground-subtle);
+  cursor: pointer;
+  font-size: var(--ui-font-size-secondary);
+  text-align: left;
+  transition:
+    background var(--dur-instant) var(--ease-standard),
+    color var(--dur-instant) var(--ease-standard);
+}
+
+.dashboard-sidebar-action-icon {
+  display: inline-flex;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--foreground-subtle);
+  transition:
+    border-color var(--dur-instant) var(--ease-standard),
+    color var(--dur-instant) var(--ease-standard);
+}
+
+.dashboard-sidebar-action:hover {
+  background: var(--sidebar-hover);
+  color: var(--foreground);
+}
+
+.dashboard-sidebar-action:hover .dashboard-sidebar-action-icon {
+  border-color: var(--border-strong);
+  color: var(--foreground);
+}
+
 .dashboard-tree-row {
   gap: 8px;
   width: 100%;
@@ -404,7 +453,52 @@ button.dashboard-list-row:hover {
   gap: 11px;
   min-width: 0;
   padding: 0 32px;
+  border-bottom: 1px solid var(--divider);
   animation: var(--dur-med) var(--ease-out-expo) both page-in;
+}
+
+/* Right-hand cluster: status, view switch, row actions, evenly spaced. */
+.workspace-header-tools {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.workspace-header-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.workspace-header-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+}
+
+.workspace-header-tab {
+  padding: 3px 10px;
+  border-radius: calc(var(--radius-md) - 2px);
+  color: var(--foreground-subtle);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  transition:
+    background var(--dur-instant) var(--ease-standard),
+    color var(--dur-instant) var(--ease-standard);
+}
+
+.workspace-header-tab:hover {
+  color: var(--foreground-muted);
+}
+
+.workspace-header-tab[aria-selected="true"] {
+  background: var(--surface-muted);
+  color: var(--foreground);
 }
 
 .workspace-header-copy {
@@ -435,10 +529,90 @@ button.dashboard-list-row:hover {
   flex: 1;
 }
 
+/* Wrapper exists so the return-to-bottom button can float over the scroll area. */
+.workspace-thread-viewport {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
 .workspace-thread-scroll {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+.workspace-scroll-bottom {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface-panel);
+  box-shadow: var(--shadow-soft);
+  color: var(--foreground-muted);
+  cursor: pointer;
+  transform: translateX(-50%);
+  animation: var(--dur-fast) var(--ease-out-expo) both scroll-bottom-in;
+}
+
+.workspace-scroll-bottom:hover {
+  border-color: var(--border-strong);
+  color: var(--foreground);
+}
+
+@keyframes scroll-bottom-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+}
+
+/* Trailing "agent is working" line; the label itself carries the shimmer. */
+.timeline-live-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px 2px 2px 0;
+  font-size: 12.5px;
+}
+
+.timeline-live-dot {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--running);
+  animation: status-pulse-solid 1.4s ease-in-out infinite;
+}
+
+.timeline-live-elapsed {
+  flex: 0 0 auto;
+  color: var(--foreground-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes status-pulse-solid {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 .workspace-thread {
@@ -468,11 +642,14 @@ button.dashboard-list-row:hover {
 .thread-user-bubble {
   max-width: min(100%, 560px);
   padding: 10px 14px;
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--surface-soft);
   color: var(--foreground);
   font-size: var(--ui-font-size);
   line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .thread-assistant-text {
@@ -643,106 +820,180 @@ button.dashboard-list-row:hover {
   }
 }
 
-.workspace-composer-project {
+/*
+ * Protrusion bar + card, per zeno: the context chips sit in a full-width bar
+ * whose bottom corners are square, and the card below reduces its top radius
+ * to nest into it. The two read as one control instead of stacked boxes.
+ */
+.composer-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: fit-content;
-  max-width: 100%;
-  min-height: 36px;
-  margin: 0 0 -8px;
-  padding: 0 14px 8px;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 3px 8px;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: var(--composer-protrusion);
   color: var(--foreground-muted);
   font-size: var(--ui-font-size-secondary);
 }
 
-.workspace-composer-input {
+/*
+ * Scoped under .composer-bar so these beat the Radix trigger's
+ * data-[size=…] utilities, which carry attribute-selector specificity.
+ */
+.composer-bar .composer-chip {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 46%;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  box-shadow: none;
+  color: var(--foreground-muted);
+  font-size: var(--ui-font-size-secondary);
+  cursor: pointer;
+  transition:
+    background var(--dur-instant) var(--ease-standard),
+    color var(--dur-instant) var(--ease-standard);
+}
+
+.composer-bar .composer-chip > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-bar .composer-chip:hover,
+.composer-bar .composer-chip:focus-visible,
+.composer-bar .composer-chip[data-state="open"] {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+  color: var(--foreground);
+  outline: none;
+}
+
+.composer-bar .composer-chip:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.composer-bar .composer-chip.is-static {
+  max-width: none;
+  cursor: default;
+}
+
+.composer-bar .composer-chip.is-static:hover {
+  background: transparent;
+  color: var(--foreground-muted);
+}
+
+.composer-card {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  min-height: 100px;
-  padding: 14px 12px 10px 16px;
+  flex-direction: column;
+  min-width: 0;
   border: 1px solid var(--composer-border);
   border-radius: var(--radius-lg);
   background: var(--composer);
   box-shadow: var(--shadow-soft);
   transition:
     border-color var(--dur-fast) var(--ease-standard),
-    background var(--dur-fast) var(--ease-standard),
-    box-shadow var(--dur-fast) var(--ease-standard);
+    background var(--dur-fast) var(--ease-standard);
 }
 
-.workspace-composer-input:focus-within {
+.composer-card:focus-within {
   border-color: var(--border-strong);
   background: #2e2e2e;
 }
 
-.workspace-composer-input textarea {
-  flex: 1;
+.composer-card.is-attached {
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
+}
+
+.composer-field {
   width: 100%;
-  min-height: 56px;
-  max-height: 128px;
-  padding: 0;
+  min-height: 60px;
+  max-height: 176px;
+  padding: 12px 14px 2px;
   border: 0;
   outline: 0;
   background: transparent;
   resize: none;
   color: var(--foreground);
-  line-height: 1.5;
+  font: inherit;
+  font-size: var(--ui-font-size);
+  line-height: 1.55;
 }
 
-.workspace-composer-input textarea::placeholder {
+.composer-field::placeholder {
   color: var(--foreground-subtle);
 }
 
-.workspace-composer-input textarea:focus-visible {
+.composer-field:focus-visible {
   border: 0;
   outline: 0;
   box-shadow: none;
 }
 
-.workspace-composer-footer {
+/* Own row so the send button can never crowd the text. */
+.composer-actions {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 4px 0;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 8px 6px 14px;
   color: var(--foreground-faint);
   font-size: 12px;
 }
 
-.workspace-composer-send {
+.composer-actions-hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-actions-spacer {
+  flex: 1;
+  min-width: 8px;
+}
+
+.composer-send {
   display: inline-flex;
   flex: 0 0 30px;
   align-items: center;
   justify-content: center;
   width: 30px;
   height: 30px;
-  margin-top: auto;
   border-radius: 50%;
-  background: var(--surface-muted);
-  color: var(--foreground-muted);
+  background: var(--primary);
+  color: var(--primary-foreground);
   cursor: pointer;
   transition:
     background var(--dur-instant) var(--ease-standard),
     color var(--dur-instant) var(--ease-standard),
+    opacity var(--dur-instant) var(--ease-standard),
     transform var(--dur-instant) var(--ease-standard);
 }
 
-.workspace-composer-send:hover:not(:disabled) {
-  background: var(--primary);
-  color: var(--primary-foreground);
+.composer-send:hover:not(:disabled) {
   transform: translateY(-1px);
 }
 
-.workspace-composer-send:active:not(:disabled) {
+.composer-send:active:not(:disabled) {
   transform: scale(0.92);
 }
 
-.workspace-composer-send:disabled {
+.composer-send:disabled {
+  background: var(--surface-muted);
+  color: var(--foreground-faint);
   cursor: default;
-  opacity: 0.55;
 }
 
 /* Page + modal motion */
@@ -892,16 +1143,12 @@ button.dashboard-list-row:hover {
     padding-bottom: 12px;
   }
 
-  .workspace-composer-project {
+  .composer-bar {
     min-height: 32px;
   }
 
-  .workspace-composer-input {
-    min-height: 88px;
-  }
-
-  .workspace-composer-footer {
-    flex-wrap: wrap;
+  .composer-field {
+    min-height: 52px;
   }
 }
 
@@ -923,7 +1170,7 @@ button.dashboard-list-row:hover {
     display: none;
   }
 
-  .workspace-composer-footer {
+  .composer-actions-hint {
     display: none;
   }
 }

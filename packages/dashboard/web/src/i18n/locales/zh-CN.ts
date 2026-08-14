@@ -37,10 +37,12 @@ export default {
     emptyTitle: "开始会话",
     emptySubtitle: "从侧栏选择一个会话，或先添加一台主机。",
     composerAria: "消息输入框",
-    composerPlaceholder: "发送消息，Enter 发送，Shift+Enter 换行",
+    composerPlaceholder: "给这个会话发消息…",
     messageInputAria: "消息输入",
     send: "发送消息",
     sendFailed: "发送失败：{{message}}",
+    submitHint: "Enter 发送 · Shift+Enter 换行",
+    scrollToBottom: "回到最新消息",
     newSession: {
       projectAria: "选择项目",
       providerAria: "选择提供方",
@@ -63,6 +65,8 @@ export default {
       compaction: "上下文已压缩",
       codeCopy: "复制代码",
       codeCopied: "已复制",
+      replying: "正在回复…",
+      runningTool: "正在执行 {{detail}}",
     },
     view: {
       timeline: "时间线",

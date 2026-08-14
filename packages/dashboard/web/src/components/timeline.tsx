@@ -1,49 +1,14 @@
-import type { AgentTimelineItem, ToolCallDetail } from "@getpaseo/protocol/agent-types";
+import type { AgentTimelineItem } from "@getpaseo/protocol/agent-types";
 import { Check, ChevronUp, Circle, LoaderCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { CodeBlock } from "@/components/code-block";
 import { MarkdownContent } from "@/components/markdown-content";
+import { TimelineLiveStatus } from "@/components/timeline-live-status";
 import { Button } from "@/components/ui/button";
+import type { LiveActivity } from "@/lib/live-activity";
+import { toolCallBody, toolCallSummary } from "@/lib/tool-call";
 import type { AgentTimelineState, TimelineEntry } from "@/stores/timeline-store";
 import { cn } from "@/lib/utils";
-
-function toolCallSummary(name: string, detail: ToolCallDetail): string {
-  switch (detail.type) {
-    case "shell":
-      return detail.command;
-    case "read":
-    case "edit":
-    case "write":
-      return `${detail.type} ${detail.filePath}`;
-    case "search":
-      return `${detail.toolName ?? "search"} ${detail.query}`;
-    case "fetch":
-      return detail.url;
-    case "worktree_setup":
-      return detail.branchName;
-    case "sub_agent":
-      return detail.description ?? name;
-    case "plain_text":
-      return detail.label ?? name;
-    case "plan":
-      return name;
-    default:
-      return name;
-  }
-}
-
-function toolCallBody(detail: ToolCallDetail): string | null {
-  switch (detail.type) {
-    case "shell":
-      return detail.output ?? null;
-    case "edit":
-      return detail.unifiedDiff ?? null;
-    case "plan":
-      return detail.text;
-    default:
-      return null;
-  }
-}
 
 const toolStatusColor: Record<string, string> = {
   running: "var(--warning)",
@@ -89,8 +54,8 @@ function TimelineItemView({ entry }: { entry: TimelineEntry }) {
   switch (item.type) {
     case "user_message":
       return (
-        <div className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-panel)] px-3.5 py-2.5 text-[14px] leading-relaxed text-[var(--foreground)] whitespace-pre-wrap break-words">
-          {item.text}
+        <div className="flex justify-end">
+          <div className="thread-user-bubble">{item.text}</div>
         </div>
       );
     case "assistant_message":
@@ -145,9 +110,11 @@ function TimelineItemView({ entry }: { entry: TimelineEntry }) {
 
 export function TimelineView({
   timeline,
+  liveActivity,
   onLoadOlder,
 }: {
   timeline: AgentTimelineState | null;
+  liveActivity: LiveActivity | null;
   onLoadOlder: () => void;
 }) {
   const { t } = useTranslation();
@@ -185,7 +152,7 @@ export function TimelineView({
           {t("workspace.timeline.loadFailed", { message: timeline.error })}
         </p>
       )}
-      {timeline.entries.length === 0 && !timeline.error && (
+      {timeline.entries.length === 0 && !timeline.error && !liveActivity && (
         <p className="py-6 text-center text-[13px] text-[var(--foreground-faint)]">
           {t("workspace.timeline.empty")}
         </p>
@@ -197,11 +164,15 @@ export function TimelineView({
         // the scrollbar stable while items are unrendered.
         <div
           key={`${entry.seqStart}-${entry.seqEnd}`}
-          className="[contain-intrinsic-size:auto_64px] [content-visibility:auto]"
+          className={cn(
+            "[contain-intrinsic-size:auto_64px] [content-visibility:auto]",
+            entry.item.type === "user_message" && "pt-3",
+          )}
         >
           <TimelineItemView entry={entry} />
         </div>
       ))}
+      {liveActivity && <TimelineLiveStatus activity={liveActivity} />}
     </div>
   );
 }
