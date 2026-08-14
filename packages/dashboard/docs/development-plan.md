@@ -260,19 +260,23 @@
 
 ### P3.1 Connection Manager 完善
 
+**已完成。**
+
 **任务**
 
 1. ~~完善 `PaseoConnectionManager`：多 Host 连接管理、重连策略、状态订阅。~~ 完成。
 2. ~~登出/删除 Host/session 失效时清理本地连接和 capability。~~ 完成。
-3. 使用 `server_info.features.*` 的 capability gate 决定功能显示。**未做，是 P3.1 退出条件**：`server_info.features.*` 全代码库零处使用，`getLastServerInfoMessage()` 只被 Host 导入流程用来读 `version`。P3.5 依赖它。
+3. 使用 `server_info.features.*` 的 capability gate 决定功能显示。**完成**：`paseo/features.ts` 提供 `getDaemonFeatures(serverInfo)` 集中提取 feature flags；`selectiveAgentTimeline` 在 `viewAgent`/`leaveAgent` 中 gate（COMPAT 标签）；`terminalRestoreModes` 在 `terminalSession.ts` 中 gate（已有 COMPAT 标签）。10 单测覆盖。
 
 **产出**
 
 - 全局连接管理模块（页面不直接创建 `DaemonClient`）。
+- Feature detection 模块 `paseo/features.ts`。
 
 **验证**
 
 - 官方 client 缺口清单中的项由 connection manager 补齐并通过测试。
+- Feature gating 在需要的地方生效（selective timeline 和 terminal restore modes）。
 
 ### P3.2 Agent 主面板
 
@@ -323,6 +327,22 @@
 **验证**
 
 - runtime 5 个新单测 + agent-tree 归档行单测；Playwright 实测（真实 daemon + codex）：空态创建会话 → initialPrompt 进 timeline → 收到精确回复 → composer 发第二条消息 → 收到回复 → 归档 → Agents 页出现「已归档」区。权限卡片的真实触发未复现（该 daemon 的 codex 模式自动放行 shell 命令），响应链路由单测覆盖。
+
+### UI 交互打磨（对齐 zeno 结构，不改协议）
+
+**已完成第一、二轮。** 不进 roadmap 编号；缺的是 UI，不是 RPC。约定见 [`docs/ui.md`](./ui.md)。
+
+**第一轮**：markdown / 代码高亮 / radix Select·Dialog / AlertDialog 替换 `window.alert` / autosize textarea。见 `progress.md`。
+
+**第二轮**：
+
+1. Composer 改成 protrusion 条焊在输入卡片上，发送按钮独立成底栏，不再和文字抢同一行。
+2. 侧栏「添加主机」从导航行改成带虚线方标的次级动作。
+3. 运行状态两层：侧栏 `SessionStatusMarker`（running 转圈 / error 红叉 / idle 点）；时间线末尾 `TimelineLiveStatus`（shimmer「正在回复…」或工具摘要 + 计时）。phase 从最新 timeline 条目推断，因为 daemon 只报 running/idle/error。
+4. 用户消息右对齐气泡；header 状态 / Timeline·Terminal / 操作分成三组；上翻时出「回到底部」按钮。
+5. **层叠修复**：`globals.css` 的 `* { margin: 0; padding: 0 }` 原先在 layer 外，按 CSS 规则无层级样式恒定压过 `@layer utilities`，全站 `p-*`/`m-*`/`space-y-*` 静默失效（权限卡片 `p-3.5` 计算值是 `padding: 0`）。重置迁入 `@layer base`。组件类留在 layer 外，继续压过 utilities。
+
+**验证**：`deriveLiveActivity` 6 单测 + `formatElapsed` 4 单测。盒模型实测权限卡片 padding 0→14px。Playwright 确认 protrusion composer、运行中会话末尾 live status 计时在走。
 
 ### P3.5 兼容性测试
 

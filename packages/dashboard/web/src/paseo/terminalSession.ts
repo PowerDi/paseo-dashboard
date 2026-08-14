@@ -1,5 +1,6 @@
 import type { TerminalState } from "@getpaseo/protocol/messages";
 import type { DaemonClientLike } from "./connectionManager";
+import { getDaemonFeatures } from "./features";
 
 export const TERMINAL_RESTORE_SCROLLBACK_LINES = 200;
 
@@ -73,10 +74,11 @@ export function openTerminalSession(options: TerminalSessionOptions): TerminalSe
 
   sink.onStatus({ phase: "attaching" });
 
-  // COMPAT(terminalRestoreModes): old daemons ignore restore options and send
-  // a snapshot frame instead; drop the gate when the daemon floor >= v0.1.81.
-  const supportsRestoreModes =
-    client.getLastServerInfoMessage()?.features?.["terminal-restore-modes"] === true;
+  // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
+  // Old daemons ignore restore options and send a snapshot frame instead.
+  const serverInfo = client.getLastServerInfoMessage();
+  const features = getDaemonFeatures(serverInfo);
+  const supportsRestoreModes = features.terminalRestoreModes;
   const restore = supportsRestoreModes
     ? {
         mode: "visible-snapshot" as const,

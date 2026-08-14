@@ -37,7 +37,7 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 | `docs/paseo-integration.md`    | 官方 client/protocol 用法、Relay E2EE 边界、Dashboard 连接层、页面平移原则、兼容策略         | 所有涉及 Paseo 通信的任务          |
 | `docs/security.md`             | 保护目标、信任边界、pairing 安全、存储加密、认证方案、撤销语义、审计规则、安全测试           | 所有安全相关任务                   |
 | `docs/deployment.md`           | 部署指南：环境变量、KEK 管理、反代、备份、安全检查清单                                       | 部署和运维                         |
-| `docs/m0-exit-report.md`       | M0 退出条件检查报告：敏感数据检查、client 覆盖矩阵、缺口清单                                 | M0 退出确认                        |
+| `docs/ui.md`                   | Dashboard Web 视觉与交互：Zeno 参照、层叠、composer/侧栏/运行状态、禁止项                    | 改 `web/` 页面、组件、CSS 前必读   |
 
 ## 当前状态
 
@@ -61,7 +61,7 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 - [x] **P2.4 安全加固**：内存 rate limiter（login/register/refresh/change-password 按 IP）；Origin 校验（状态变更请求）；CSP/X-Frame-Options/nosniff headers；审计查询 API `/audit-events`（ULID cursor 分页）；14 个安全测试（跨用户隔离、rate limit、Origin、CSP、审计）。
 - [x] **Git 仓库初始化**：paseo-board 独立仓库基线 commit `09b5a63`。
 - [x] **迁移到 Paseo monorepo**：paseo-board 代码迁移到 `packages/dashboard/`，分支 `feat/dashboard-migration`，commit `3b0ca1c03`，推送到 origin。
-- [x] **P3.1 Connection Manager（2/3）**：`DefaultPaseoConnectionManager` 多 Host 连接槽 + 状态订阅 + 官方 client `reconnect: { enabled: true }`；`daemon-data-store` 承载 projects/workspaces/agents（游标翻页 + 请求版本号防串台）；登出/删除 Host 时 `disconnectAll`/`disconnectHost` 清理连接与本地数据。**未做**：`server_info.features.*` capability gating（全代码库零处使用），P3.1 退出条件未满足。
+- [x] **P3.1 Connection Manager**：`DefaultPaseoConnectionManager` 多 Host 连接槽 + 状态订阅 + 官方 client `reconnect: { enabled: true }`；`daemon-data-store` 承载 projects/workspaces/agents（游标翻页 + 请求版本号防串台）；登出/删除 Host 时 `disconnectAll`/`disconnectHost` 清理连接与本地数据；`paseo/features.ts` 模块提供 `getDaemonFeatures(serverInfo)` 集中提取 feature flags，`selectiveAgentTimeline` 在 `viewAgent`/`leaveAgent` gating，`terminalRestoreModes` 在 `terminalSession.ts` gating（带 COMPAT 标签，退出条件满足）。
 - [x] **UI 设计系统对齐 zeno**：token 体系重写（三级 surface #2d2d2d/#383838/#272727、圆角 6/10/12px 三级、14px 正文 + 400/500/600 字重）；列表页改 hover 填充行；Workspace zeno 式空态 + composer 常驻；SectionLabel 收敛为共享组件；页头操作按钮扁平化。
 - [x] **Web i18n**：i18next + react-i18next + browser-languagedetector；zh-CN/en 类型安全字典；设置页语言切换器；localStorage 持久化 + `<html lang>` 同步；全部 UI 字符串（含 aria/tooltip）收进字典。
 - [x] **P3.2 数据接线（读路径 + 认证）**：登录/注册页 + `app-store` 认证状态机（cookie bootstrap、401 全局登出）；`App.tsx` 接 `dashboardRuntime`（host 自动连接/断开、SSE 触发增量 sync）；侧栏树/Hosts/Agents/Workspace 用真实 Host→Project→Agent 数据（`lib/agent-tree.ts` 纯函数 + 单测）；Devices/Settings 接真实 API；Host 导入弹窗改为真实验证（relay 连接读 server_info 版本）+ importHost + sync；时间显示按 locale（`lib/format-time.ts`）。`*Prototype.tsx` 页面全部替换为 `*Page.tsx`。
@@ -69,7 +69,7 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 - [x] **P3.3 Timeline（读 + 分页 + 实时）**：`stores/timeline-store.ts`（tail 页加载、`before` 向上分页、epoch/seq 切割合并、staleCursor 回退重拉、流事件节流刷新）+ 10 单测；`DaemonClientLike` 扩展 `fetchAgentTimeline`/`setAgentTimelineSubscription`；runtime `viewAgent/leaveAgent`（selective 订阅 + tail 加载）、`agent_stream` 转发；`useAgentTimeline` hook；`components/timeline.tsx` 渲染 user/assistant/reasoning（折叠）/tool_call（摘要行 + output/diff 折叠）/todo/error/compaction；Workspace 自动滚底（用户上翻时不打扰）。
 - [x] **UI 打磨第一轮（对齐 zeno desktop）**：timeline 的 assistant 消息改 `components/markdown-content.tsx`（react-markdown + remark-gfm + rehype-sanitize），代码围栏和 tool_call 输出走 `components/code-block.tsx`（highlight.js 精简语言集 + 语言标签 + 复制按钮；`edit` 工具的 unifiedDiff 走 diff 行渲染，带行号与增删底色，解析逻辑 `lib/diff-lines.ts` 从 zeno `process-activity.ts` 移植，4 单测）。从 zeno 搬 4 个 radix 基础组件（select/dialog/alert-dialog/tooltip）+ `tw-animate-css`；新建会话的两个原生 `<select>` 换成 radix Select（popper 定位在 composer 上方），全部 `window.alert` 换成 `components/error-alert.tsx` 的 AlertDialog（context + `useErrorAlert()`）；两个 composer 接 `hooks/use-autosize-textarea.ts`（56→126px 实测）。样式在 `globals.css` 追加 `.dash-md` 与 `.content-code-block`/`.content-diff-*` 段，补 `--popover` token 映射。**顺带修了既有依赖不一致**：dashboard/web 的 package.json 写 `react ^19.1.0`，lockfile 却一直钉在 18.3.1（npm 标 invalid），react-markdown 的类型把它暴露出来——对齐到 19 后 `main.tsx` 里那条 react-router `@ts-expect-error` 也不再需要，已删。web 单测 77→84；typecheck/lint/format/build 通过；Playwright 实测 markdown（标题/列表/表格/行内码/python 高亮 8 个 token）、radix 下拉、autosize。
 - [x] **P3.4 Prompt 与权限请求**：runtime 新增 `sendAgentMessage`/`createAgent`/`resumeAgent`/`respondToPermission`（`DaemonClientLike` Pick 同步扩展，5 单测）。Workspace composer 接真实发消息（Enter 发送、发送中禁用）；空态 composer 变成新建会话入口（`components/new-session-composer.tsx`：主机·项目下拉 + provider 下拉（协议包 `AGENT_PROVIDER_DEFINITIONS`）+ initialPrompt，创建后自动选中）；Agents 页新增「已归档」区（`buildArchivedAgentRows` + 单测），带 `persistence` handle 的可恢复（恢复后选中返回快照的 id，防 id 变化）；权限卡片 `components/permission-requests.tsx` 渲染 `pendingPermissions`（`actions` 有则按 behavior/variant 出按钮，无则默认允许/拒绝），响应后本地先移除等广播兜底。Playwright 实测（真实 daemon + codex）：空态创建 → prompt 进 timeline → 精确回复 → composer 追发 → 回复 → 归档 → 已归档区可见。权限卡片真实触发未复现（codex 该模式自动放行），响应链路由单测覆盖。
-- [x] **P3.3 Terminal + 大数据量处理**：`paseo/terminalSession.ts`（订阅 binary stream、output/restore/snapshot 路由、resize claim→update intent、`terminal_stream_exit`、restore 走 `features["terminal-restore-modes"]` gate）+ 8 单测；`DaemonClientLike` 扩展 7 个 terminal 方法；runtime `listTerminals`/`createTerminal`/`killTerminal`/`openTerminal`；`components/terminal-view.tsx`（`@xterm/xterm` + fit addon，snapshot 经 `renderTerminalSnapshotToAnsi` 重放）+ `components/workspace-terminal.tsx`（终端 tab 列表、创建/结束）；Workspace 头部 Timeline/Terminal 切换。大数据量：timeline-store 每 agent 500 条内存上限（裁掉的历史经 `startCursor` 回翻，1 单测）+ timeline 条目 `content-visibility: auto` 渲染上限。Playwright 实测：登录 → 打开会话 → Terminal tab → 创建终端 → `echo` 命令实时回显 → 结束终端全链路通过。
+- [x] **UI 打磨第二轮（交互结构 + 层叠修复）**：composer 改 protrusion 条焊输入卡片（`components/composer-shell.tsx`），发送按钮独立底栏；侧栏「添加主机」改次级动作（虚线方标，不再复用 nav-item）；运行状态两层——侧栏 `SessionStatusMarker`（running 转圈 / error 红叉）、时间线末尾 `TimelineLiveStatus`（shimmer + 计时，phase 由 `deriveLiveActivity` 从最新条目推断）；用户消息右对齐气泡；header 状态/视图/操作分组；上翻出回到底部按钮。**根因修复**：`globals.css` 无层级 `* { padding: 0 }` 压过 Tailwind `@layer utilities`，全站间距工具类失效（权限卡片 `p-3.5` 计算值 0）——重置迁入 `@layer base`，盒模型实测 padding 0→14px。web 包加 `test` 脚本（自有 vite alias，避开根配置把 `@` 指到 app）；`test:dashboard` 纳入 web。单测 84→94。约定已写入 [`docs/ui.md`](./ui.md)，Cursor 规则 `.cursor/rules/dashboard-ui.mdc`。
 
 ### 迁移变更记录
 
@@ -89,14 +89,13 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 
 ### 待开始
 
-按依赖排序。1-2 阻塞 M3 退出，3 是 M1/M2 被跳过的历史缺口（服务端做了、Web 端没接）。
+按依赖排序。1 阻塞 M3 退出，2 是 M1/M2 被跳过的历史缺口（服务端做了、Web 端没接）。
 
-1. **P3.1 收尾 + feature gating**（当前优先）— `server_info.features.*` 一次性 gating。`terminalSession.ts` 已用 `features["terminal-restore-modes"]` gate restore 模式（带 COMPAT 注释），是第一个使用点；其余功能仍零 gating，`getLastServerInfoMessage()` 在 import 流程只读 `version`。这是 P3.1 的退出条件，也是 P3.5 的前置。
-2. **P3.5 兼容性测试** — daemon 版本矩阵 smoke tests。
+1. **P3.5 兼容性测试**（当前优先）— daemon 版本矩阵 smoke tests。
    另有 `roadmap.md` M3 范围里的「路由」未做（见下面「Web 数据接线」的路由说明），要不要在 M3 内补取决于是否需要深链。
-3. **P3.6 历史 Web 缺口补齐** — 服务端路由已实现、Web 端完全没接的四项：`POST /auth/change-password`（P1.1 记为完成，但没有页面和 client 方法）、`PATCH /hosts/:id` 改名（P1.2 的乐观并发 409 路径 Web 端从未调用过）、`GET /audit-events`（P2.4 完成，产品需求里「审计记录」是独立页面）、`GET /me`（`app-store` 现在用 localStorage 缓存 user，刷新后靠缓存显示邮箱，有 `/me` 可以直接取）。另加 SSE 重连：server 已发 `id:` 并支持 `Last-Event-ID`，`dashboardEvents.ts` 能解析 id 但从不回传，也没有重连循环——流断掉（代理超时/网络抖动）后 Host 配置更新静默停止，直到用户刷新页面。以及把 web 单测接进 npm 脚本和 CI（见下面测试统计）。development-plan.md 已补 P3.6 小节。
-4. Timeline 后续优化（记录，不阻塞）：流式期间靠节流 tail 重拉（400ms/次，limit 50），未做增量 stream reducer；「加载更早」是按钮而非滚动哨兵。权限卡片的真实弹出流程也待一次带审批模式的实测。
-5. 后续见 docs/development-plan.md 的完整序列。
+2. **P3.6 历史 Web 缺口补齐** — 服务端路由已实现、Web 端完全没接的四项：`POST /auth/change-password`（P1.1 记为完成，但没有页面和 client 方法）、`PATCH /hosts/:id` 改名（P1.2 的乐观并发 409 路径 Web 端从未调用过）、`GET /audit-events`（P2.4 完成，产品需求里「审计记录」是独立页面）、`GET /me`（`app-store` 现在用 localStorage 缓存 user，刷新后靠缓存显示邮箱，有 `/me` 可以直接取）。另加 SSE 重连：server 已发 `id:` 并支持 `Last-Event-ID`，`dashboardEvents.ts` 能解析 id 但从不回传，也没有重连循环——流断掉（代理超时/网络抖动）后 Host 配置更新静默停止，直到用户刷新页面。web 单测已进 `test:dashboard`；CI 仍不跑 dashboard。development-plan.md 已补 P3.6 小节。
+3. Timeline 后续优化（记录，不阻塞）：流式期间靠节流 tail 重拉（400ms/次，limit 50），未做增量 stream reducer；「加载更早」是按钮而非滚动哨兵。权限卡片的真实弹出流程也待一次带审批模式的实测。
+4. 后续见 docs/development-plan.md 的完整序列。
 
 ## 关键约束（回答问题时必须遵守）
 
@@ -174,8 +173,9 @@ npm run dev:dashboard:server   # 后端 端口 3000
 npm run dev:dashboard:web      # 前端 端口 5173
 
 # 测试
-npm run test:dashboard         # contract 79 + e2e vitest 8（不含 web 单测）
-npx vitest run packages/dashboard/web/src   # web 单测 62
+npm run test:dashboard         # web 94 + contract 79 + e2e vitest 8
+# web 单测必须走 workspace 脚本（该包 vite.config 的 @ 别名），不要从根 vitest 直接跑 web/src
+npm run test --workspace=@getpaseo/dashboard-web
 
 # 类型检查
 npm run typecheck:dashboard
@@ -215,20 +215,14 @@ npm run typecheck:dashboard
 
 ### Web UI 与 i18n
 
-- 设计 token 在 `web/src/globals.css`（surface/圆角/字阶体系，注释即规范）；结构样式在 `web/src/App.css`。UI 字符串一律走 i18n，不写死。
-- **组件参照 zeno desktop**：`/root/workspace/code/zeno/apps/desktop/src/renderer/`（不是 `apps/landing`，那只是营销首页）。技术栈同构（Tailwind 4 + CVA + lucide + radix-ui），`components/ui/` 下 23 个 shadcn 风格组件基本可直接复制，改 import 路径即可。已搬 select/dialog/alert-dialog/tooltip；未搬的还有 dropdown-menu、popover、tabs、switch、scroll-area、command、collapsible、field/input/label、message-scroller 等。搬组件时注意两点：radix 组件依赖 `animate-in`/`fade-in-0` 这类工具类，需要 `tw-animate-css`；用到的语义色（`bg-popover` 等）要在 `globals.css` 的 `@theme inline` 里有映射。
-- radix Select 的默认 `position="item-aligned"` 会盖住触发器，在 composer 这种贴底的小控件上要显式给 `position="popper" side="top"`。
-- i18n 在 `web/src/i18n/`：`locales/zh-CN.ts` 是字典事实来源，`en.ts` 用 `typeof zhCN` 约束（漏译编译报错）；key 类型经 `react-i18next.d.ts` 模块增强，`t()` 拼错 key 编译报错。
-- 语言检测顺序 localStorage（key `paseo-dashboard-language`）→ navigator；切换器在设置页「偏好」。
-- headless Chrome 截图 QA 的坑：首帧不推进 CSS 动画（`startTime: null`），入场动画元素全透明；截图前先 `mouse.move` + `wheel` 触发合成。
-- server 对状态变更请求做 Origin 校验，只放行 5173 等白名单端口——Playwright/开发用别的端口起 vite 会在登录时收到 403「Origin 校验失败」。
+见 [`docs/ui.md`](./ui.md)。token、层叠、composer/侧栏/运行状态、Zeno 组件对照、i18n、禁止项都在那一篇。Playwright 端口与 headless 截图坑也写在「验证」。
 
 ### 测试统计
 
-- web 单测 **84**（11 文件：dashboardApi 1、dashboardEvents 4、connectionManager 7、dashboardRuntime 17、daemon-data-store 12、timeline-store 11、terminalSession 8、app-store 7、agent-tree 10、diff-lines 4、code-language 3）。2026-08-13 实跑 11 文件 84 通过。
-- contract **79**（server-auth 16、server-security 14、server-events 14、server-hosts 13、server-sync 8、server-devices-sessions 9、auth 2、host-sync 3）+ e2e vitest **8**（connection-manager 4、offer-parser 3、placeholder 1）= 静态统计 **158** 含 web。
+- web 单测 **104**（14 文件：dashboardApi 1、dashboardEvents 4、connectionManager 7、dashboardRuntime 17、daemon-data-store 12、timeline-store 11、terminalSession 8、app-store 7、agent-tree 10、diff-lines 4、code-language 3、live-activity 6、format-time 4、features 10）。2026-08-14 实跑 14 文件 104 通过。
+- contract **79**（server-auth 16、server-security 14、server-events 14、server-hosts 13、server-sync 8、server-devices-sessions 9、auth 2、host-sync 3）+ e2e vitest **8**（connection-manager 4、offer-parser 3、placeholder 1）= 静态统计 **191** 含 web。
 - Playwright 浏览器 E2E 3 测试（需 `PLAYWRIGHT_BROWSERS_PATH=/tmp/playwright-browsers`）。
-- **web 单测没有被任何 npm 脚本覆盖**：`web/package.json` 没有 `test` 脚本，`test:dashboard` 只跑 contract 和 e2e 两个 workspace。跑 web 单测要从根目录显式给路径：`npx vitest run packages/dashboard/web/src`（根 `vitest.config.ts` 把 `@` 别名指向 `packages/app/src`，所以 web 测试文件一律用相对路径 import，不要写 `@/`）。
+- **web 单测**：`packages/dashboard/web/package.json` 有 `test` 脚本，走该包自己的 `vite.config.ts`（`@` 指向 `web/src`）。根 `vitest.config.ts` 仍把 `@` 指到 `packages/app/src`，所以从仓库根直接 `npx vitest run packages/dashboard/web/src` 会错；用 `npm run test --workspace=@getpaseo/dashboard-web`。`test:dashboard` 现已包含 web。feature gating 10 单测在 `features.test.ts`。
 - **CI 完全不跑 dashboard 测试**：`.github/workflows/ci.yml` 的测试 job 都是 `npm run test --workspace=<pkg>` 点名指定，没有 dashboard。根 `npm run typecheck`/`lint`/`format:check` 是 `--workspaces`，这三项覆盖到了。
 - Lefthook pre-commit hook 会跑全 monorepo typecheck（含 app/desktop/cli），这些包有预先存在的 typecheck 错误，不是 dashboard 引入的。dashboard 的 `typecheck:dashboard` 全部通过。提交时可用 `--no-verify` 绕过。
 
@@ -272,3 +266,6 @@ npm run typecheck:dashboard
 | 2026-08-13 | Fable            | 提交 P3.1-P3.3 工作区产出（`4cd5f2667`）。P3.3 Terminal：terminalSession（binary stream 订阅、resize claim/update、restore feature gate）+ xterm 视图 + Workspace 终端面板与 Timeline/Terminal 切换 + runtime terminal API；大数据量：timeline-store 500 条内存上限 + 条目 `content-visibility`；web 单测 62→71；typecheck/lint/format/build 通过；Playwright 实测真实 daemon 终端创建/输入/回显/结束全链路                                                                                                                              |
 | 2026-08-13 | Fable            | P3.4 完成：runtime 四方法（sendAgentMessage/createAgent/resumeAgent/respondToPermission）；composer 真实发消息；空态新建会话入口（项目/provider 下拉 + initialPrompt）；Agents 页已归档区 + persistence handle 恢复；权限请求卡片（actions 或默认允许/拒绝，本地先移除）；web 单测 71→77；typecheck/lint/format 通过；Playwright 实测创建→对话→追问→归档全链路（codex 真实回复）                                                                                                                                                         |
 | 2026-08-13 | Fable            | UI 打磨第一轮：timeline markdown 渲染 + highlight.js 代码块（语言标签/复制/diff 行号着色）；从 zeno 搬 radix select/dialog/alert-dialog/tooltip + tw-animate-css；原生 select → radix Select，window.alert → AlertDialog，composer autosize；修 dashboard/web lockfile 钉在 React 18 的既有不一致（对齐 19，删掉失效的 `@ts-expect-error`）；web 单测 77→84；typecheck/lint/format/build 通过；Playwright 实测 markdown/高亮/下拉/autosize                                                                                               |
+| 2026-08-14 | Fable            | UI 打磨第二轮：composer protrusion + 底栏发送；侧栏添加主机改次级动作；运行状态双层（侧栏 marker + 时间线 live status/shimmer/计时）；用户气泡、header 分组、回到底部。根因：无层级 `*` reset 压过 Tailwind utilities，间距类全失效，重置迁入 `@layer base`。web 单测 84→94 并进 `test:dashboard`。                                                                                                                                                                                                                                      |
+| 2026-08-14 | Fable            | 把 Dashboard Web UI 风格写成 `docs/ui.md`；`.cursor/rules/dashboard-ui.mdc` 在改 `packages/dashboard/web/**` 时自动带上；AGENTS.md / 文档地图 / paseo-integration 页面平移原则改为指向该篇。                                                                                                                                                                                                                                                                                                                                             |
+| 2026-08-14 | Fable            | P3.1 完成：集中 feature gating 模块 `paseo/features.ts`（`getDaemonFeatures`/`isCompatibleDaemon` + 10 单测）；`selectiveAgentTimeline` 在 `viewAgent`/`leaveAgent` 中 gate（COMPAT 标签）；`terminalRestoreModes` 改用统一模块；dashboardRuntime 测试补 `getLastServerInfoMessage` 返回完整 server_info。web 单测 94→104，test:dashboard 全绿（web 104 + contract 79 + e2e 8 = 191）；typecheck/lint/format 通过。P3.1 退出条件满足。                                                                                                   |

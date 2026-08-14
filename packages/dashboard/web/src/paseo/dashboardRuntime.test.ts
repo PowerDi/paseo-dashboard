@@ -212,8 +212,17 @@ class RuntimeClient implements DaemonClientLike, DaemonDataClient {
     return () => this.listeners.delete(listener);
   }
 
-  getLastServerInfoMessage(): null {
-    return null;
+  getLastServerInfoMessage() {
+    return {
+      status: "server_info" as const,
+      serverId: `srv_${this.hostId}`,
+      hostname: null,
+      version: null,
+      features: {
+        selectiveAgentTimeline: true,
+        "terminal-restore-modes": true,
+      },
+    };
   }
 
   private readonly messageListeners = new Map<

@@ -26,6 +26,7 @@ import {
   type TerminalSessionSink,
   type TerminalSize,
 } from "./terminalSession";
+import { getDaemonFeatures } from "./features";
 
 export interface DashboardTerminalInfo {
   id: string;
@@ -313,16 +314,25 @@ export function createDashboardRuntime(
 
     async viewAgent(hostId, agentId) {
       const client = connectionManager.getDaemonClient(hostId);
-      // Selective daemons only stream subscribed agents; legacy daemons
-      // ignore this (the client no-ops without the feature flag).
-      await client?.setAgentTimelineSubscription([agentId]).catch(() => undefined);
+      // COMPAT(selectiveAgentTimeline): added in v0.1.106, remove gate after 2027-01-12.
+      // Selective daemons only stream subscribed agents; old daemons broadcast all.
+      const serverInfo = client?.getLastServerInfoMessage() ?? null;
+      const features = getDaemonFeatures(serverInfo);
+      if (features.selectiveAgentTimeline) {
+        await client?.setAgentTimelineSubscription([agentId]).catch(() => undefined);
+      }
       await timelineStore.getState().open(hostId, agentId);
     },
 
     async leaveAgent(hostId, agentId) {
       timelineStore.getState().close(hostId, agentId);
       const client = connectionManager.getDaemonClient(hostId);
-      await client?.setAgentTimelineSubscription([]).catch(() => undefined);
+      // COMPAT(selectiveAgentTimeline): added in v0.1.106, remove gate after 2027-01-12.
+      const serverInfo = client?.getLastServerInfoMessage() ?? null;
+      const features = getDaemonFeatures(serverInfo);
+      if (features.selectiveAgentTimeline) {
+        await client?.setAgentTimelineSubscription([]).catch(() => undefined);
+      }
     },
 
     async loadOlderTimeline(hostId, agentId) {
