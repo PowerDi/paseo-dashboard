@@ -21,7 +21,7 @@ describe("deriveLiveActivity", () => {
     expect(deriveLiveActivity({ status: "error", entries })).toBeNull();
   });
 
-  it("reports a plain reply when the newest entry is not a running tool", () => {
+  it("returns null when the newest entry is a completed assistant message", () => {
     const activity = deriveLiveActivity({
       status: "running",
       entries: [
@@ -29,10 +29,9 @@ describe("deriveLiveActivity", () => {
         entry({ type: "assistant_message", text: "on it" }, "2026-08-13T10:00:05.000Z", 2),
       ],
     });
-    expect(activity).toEqual({
-      phase: "replying",
-      startedAt: Date.parse("2026-08-13T10:00:00.000Z"),
-    });
+    // Even though status is still "running" (daemon hasn't sent agent_update yet),
+    // a completed assistant message means the turn is done.
+    expect(activity).toBeNull();
   });
 
   it("surfaces the command of a running tool call", () => {
@@ -87,7 +86,6 @@ describe("deriveLiveActivity", () => {
       status: "running",
       entries: [
         entry({ type: "user_message", text: "first" }, "2026-08-13T10:00:00.000Z", 1),
-        entry({ type: "assistant_message", text: "done" }, "2026-08-13T10:00:10.000Z", 2),
         entry({ type: "user_message", text: "second" }, "2026-08-13T10:05:00.000Z", 3),
       ],
     });

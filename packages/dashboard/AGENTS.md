@@ -20,15 +20,15 @@
 
 ### 按目录选择
 
-| 修改位置              | 开发前必须阅读                                                                                          | 重点                                                                                    |
-| --------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `web/`                | `docs/product-requirements.md`、`docs/architecture.md`、`docs/paseo-integration.md`、`docs/ui.md`       | 页面目标、Web 与 Dashboard API/daemon 的两条连接、官方 client/protocol 用法、视觉与交互 |
-| `harmony/`            | `docs/product-requirements.md`、`docs/architecture.md`、`docs/paseo-integration.md`、`docs/security.md` | 与 Web 共用 API、Harmony 平台适配、安全存储、Relay 兼容要求                             |
-| `server/`             | `docs/architecture.md`、`docs/security.md`、`docs/product-requirements.md`                              | User/Session/Device/Host 数据、API、加密、审计；禁止进入 daemon 数据面                  |
-| `packages/contracts/` | `docs/architecture.md`、`docs/product-requirements.md`、`docs/security.md`                              | API 请求/响应、错误 code、Host sync、敏感字段边界                                       |
-| `tests/contract/`     | `docs/architecture.md`、`docs/product-requirements.md`                                                  | Web/Harmony/Server 对同一 API 的一致理解                                                |
-| `tests/e2e/`          | `docs/product-requirements.md`、`docs/security.md`、`docs/roadmap.md`                                   | 用户流程、验收标准、数据路径和泄露检查                                                  |
-| `docs/`               | 先读要修改主题的现有文档，再读 `docs/open-decisions.md`                                                 | 修改原有结论，不在多个文档重复同一事实                                                  |
+| 修改位置              | 开发前必须阅读                                                                                                                 | 重点                                                                                              |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `web/`                | `docs/product-requirements.md`、`docs/architecture.md`、`docs/paseo-integration.md`、`docs/ui.md`、`docs/local-development.md` | 页面目标、Web 与 Dashboard API/daemon 的两条连接、官方 client/protocol 用法、视觉与交互、本地开发 |
+| `harmony/`            | `docs/product-requirements.md`、`docs/architecture.md`、`docs/paseo-integration.md`、`docs/security.md`                        | 与 Web 共用 API、Harmony 平台适配、安全存储、Relay 兼容要求                                       |
+| `server/`             | `docs/architecture.md`、`docs/security.md`、`docs/product-requirements.md`、`docs/local-development.md`                        | User/Session/Device/Host 数据、API、加密、审计；禁止进入 daemon 数据面、Origin 校验               |
+| `packages/contracts/` | `docs/architecture.md`、`docs/product-requirements.md`、`docs/security.md`                                                     | API 请求/响应、错误 code、Host sync、敏感字段边界                                                 |
+| `tests/contract/`     | `docs/architecture.md`、`docs/product-requirements.md`                                                                         | Web/Harmony/Server 对同一 API 的一致理解                                                          |
+| `tests/e2e/`          | `docs/product-requirements.md`、`docs/security.md`、`docs/roadmap.md`                                                          | 用户流程、验收标准、数据路径和泄露检查                                                            |
+| `docs/`               | 先读要修改主题的现有文档，再读 `docs/open-decisions.md`                                                                        | 修改原有结论，不在多个文档重复同一事实                                                            |
 
 ### 按功能追加阅读
 

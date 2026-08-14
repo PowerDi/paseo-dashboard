@@ -27,6 +27,10 @@ export function deriveLiveActivity(input: {
   const base = startedAt === undefined ? {} : { startedAt };
   const last = input.entries[input.entries.length - 1];
 
+  // If the last entry is a completed assistant message, the turn is done even
+  // if the daemon's agent_update hasn't fired yet to flip status to idle.
+  if (last?.item.type === "assistant_message") return null;
+
   if (last?.item.type === "tool_call" && last.item.status === "running") {
     return { phase: "tool", detail: toolCallSummary(last.item.name, last.item.detail), ...base };
   }
