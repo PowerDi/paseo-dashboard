@@ -38,8 +38,14 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 | `docs/security.md`             | 保护目标、信任边界、pairing 安全、存储加密、认证方案、撤销语义、审计规则、安全测试           | 所有安全相关任务                   |
 | `docs/deployment.md`           | 部署指南：环境变量、KEK 管理、反代、备份、安全检查清单                                       | 部署和运维                         |
 | `docs/ui.md`                   | Dashboard Web 视觉与交互：Zeno 参照、层叠、composer/侧栏/运行状态、禁止项                    | 改 `web/` 页面、组件、CSS 前必读   |
+| `docs/local-development.md`    | 本地开发指南：快速启动、Origin 校验、环境变量、常见问题、调试技巧                            | 本地开发与排查问题时必读            |
 
 ## 当前状态
+
+### 最新修复（commit `01ea5125f`）
+
+- **Live Status 计时 bug 修复**：`deriveLiveActivity` 在最后一条是 assistant_message 时返回 null，即使 agent status 还是 "running"（daemon agent_update 延迟），完整回复就停止计时。测试用例同步修正。
+- **本地开发文档**：新增 `docs/local-development.md` - Origin 校验说明（localhost vs 127.0.0.1）、环境变量、常见问题（403/新建会话失败/Live Status）、调试技巧。
 
 ### 已完成
 
