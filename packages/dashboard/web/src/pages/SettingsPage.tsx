@@ -1,4 +1,5 @@
-import { Check, LoaderCircle, LockKeyhole, RefreshCw } from "lucide-react";
+import { Check, LoaderCircle, LockKeyhole, RefreshCw, Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { SectionLabel } from "@/components/section-label";
@@ -8,6 +9,7 @@ import { revealDelay, useReveal } from "@/lib/use-reveal";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
 import { useHostSyncStore } from "@/stores/host-sync-store";
+import { changePassword } from "@/api/dashboardApi";
 
 function SettingRow({
   title,
@@ -52,6 +54,131 @@ function LanguageSwitch() {
         );
       })}
     </div>
+  );
+}
+
+function ChangePasswordSection() {
+  const { t } = useTranslation();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSuccess(false);
+    if (newPassword.length < 8) {
+      setError(t("settings.changePassword.tooShort"));
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError(t("settings.changePassword.mismatch"));
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await changePassword({
+        currentPassword,
+        newPassword,
+        revokeOtherSessions: true,
+      });
+      setSuccess(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="dashboard-list-row !flex-col !items-stretch gap-3">
+      <div className="flex items-center justify-between">
+        <div className="dashboard-row-copy">
+          <span className="dashboard-row-title">{t("settings.changePassword.title")}</span>
+          <span className="dashboard-row-description">{t("settings.changePassword.hint")}</span>
+        </div>
+        {success && (
+          <span className="inline-flex shrink-0 items-center gap-1 text-[13px] text-[var(--success)]">
+            <Check size={14} />
+            {t("settings.changePassword.success")}
+          </span>
+        )}
+      </div>
+      <div className="flex flex-col gap-2">
+        <label className="flex items-center gap-2">
+          <span className="w-28 shrink-0 text-[13px] text-[var(--foreground-muted)]">
+            {t("settings.changePassword.current")}
+          </span>
+          <div className="relative flex-1">
+            <input
+              type={showCurrent ? "text" : "password"}
+              autoComplete="current-password"
+              className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--foreground-muted)]"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+            />
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--foreground-faint)]"
+              onClick={() => setShowCurrent((v) => !v)}
+            >
+              {showCurrent ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+          </div>
+        </label>
+        <label className="flex items-center gap-2">
+          <span className="w-28 shrink-0 text-[13px] text-[var(--foreground-muted)]">
+            {t("settings.changePassword.new")}
+          </span>
+          <div className="relative flex-1">
+            <input
+              type={showNew ? "text" : "password"}
+              autoComplete="new-password"
+              className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--foreground-muted)]"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+            />
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--foreground-faint)]"
+              onClick={() => setShowNew((v) => !v)}
+            >
+              {showNew ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+          </div>
+        </label>
+        <label className="flex items-center gap-2">
+          <span className="w-28 shrink-0 text-[13px] text-[var(--foreground-muted)]">
+            {t("settings.changePassword.confirm")}
+          </span>
+          <input
+            type={showNew ? "text" : "password"}
+            autoComplete="new-password"
+            className="flex-1 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--foreground-muted)]"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+          />
+        </label>
+      </div>
+      {error && <p className="text-[13px] text-[var(--danger)]">{error}</p>}
+      <div className="flex justify-end">
+        <Button type="submit" size="sm" disabled={submitting}>
+          {submitting && <LoaderCircle className="animate-spin" size={14} />}
+          {t("settings.changePassword.submit")}
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -114,10 +241,14 @@ export function SettingsPage() {
             />
           </div>
 
-          <div className="mt-8">
-            <SectionLabel style={revealDelay(6)}>{t("settings.sync")}</SectionLabel>
+          <div className="mt-4" data-reveal="" style={revealDelay(6)}>
+            <ChangePasswordSection />
           </div>
-          <div data-reveal="" style={revealDelay(7)}>
+
+          <div className="mt-8">
+            <SectionLabel style={revealDelay(7)}>{t("settings.sync")}</SectionLabel>
+          </div>
+          <div data-reveal="" style={revealDelay(8)}>
             <SettingRow
               title={t("settings.lastSyncRevision")}
               description={

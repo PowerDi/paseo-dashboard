@@ -24,3 +24,19 @@ describe("DashboardApiClient", () => {
     ).toBe("Bearer token-123");
   });
 });
+
+it("fetches the current user from /me", async () => {
+  const fetchMock = vi.fn<typeof fetch>(
+    async () =>
+      new Response(JSON.stringify({ user: { id: "usr1", email: "a@b.com" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+  );
+  const client = new DashboardApiClient({ fetch: fetchMock });
+
+  await expect(client.getMe()).resolves.toEqual({
+    user: { id: "usr1", email: "a@b.com" },
+  });
+  expect(fetchMock.mock.calls[0]![0]).toBe("/api/v1/me");
+});

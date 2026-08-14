@@ -1,14 +1,18 @@
 import type {
+  AuditEventListResponse,
+  ChangePasswordRequest,
   ConfigEvent,
   Device,
   Host,
   HostImportRequest,
   HostImportResponse,
+  HostUpdateRequest,
   LoginRequest,
   LoginResponse,
   RegisterRequest,
   Session,
   SyncResponse,
+  User,
 } from "@getpaseo/dashboard-shared";
 import {
   createConfigEventStream,
@@ -154,11 +158,40 @@ export class DashboardApiClient {
     });
   }
 
+  updateHost(hostId: string, input: HostUpdateRequest): Promise<HostImportResponse> {
+    return this.request<HostImportResponse>(`/api/v1/hosts/${encodeURIComponent(hostId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+
   logout(): Promise<{ ok: boolean }> {
     return this.request<{ ok: boolean }>("/api/v1/auth/logout", {
       method: "POST",
       notifyUnauthorized: false,
     });
+  }
+
+  getMe(): Promise<{ user: User }> {
+    return this.request<{ user: User }>("/api/v1/me");
+  }
+
+  changePassword(input: ChangePasswordRequest): Promise<{ expiresIn: number }> {
+    return this.request<{ accessToken: string; refreshToken: string; expiresIn: number }>(
+      "/api/v1/auth/change-password",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+    );
+  }
+
+  listAuditEvents(cursor?: string, limit?: number): Promise<AuditEventListResponse> {
+    const params = new URLSearchParams();
+    if (cursor) params.set("cursor", cursor);
+    if (limit !== undefined) params.set("limit", String(limit));
+    const query = params.toString();
+    return this.request<AuditEventListResponse>(`/api/v1/audit-events${query ? `?${query}` : ""}`);
   }
 
   listDevices(): Promise<Device[]> {
@@ -244,8 +277,24 @@ export function deleteHost(hostId: string): Promise<{ ok: boolean }> {
   return dashboardApi.deleteHost(hostId);
 }
 
+export function updateHost(hostId: string, input: HostUpdateRequest): Promise<HostImportResponse> {
+  return dashboardApi.updateHost(hostId, input);
+}
+
 export function logout(): Promise<{ ok: boolean }> {
   return dashboardApi.logout();
+}
+
+export function getMe(): Promise<{ user: User }> {
+  return dashboardApi.getMe();
+}
+
+export function changePassword(input: ChangePasswordRequest): Promise<{ expiresIn: number }> {
+  return dashboardApi.changePassword(input);
+}
+
+export function listAuditEvents(cursor?: string, limit?: number): Promise<AuditEventListResponse> {
+  return dashboardApi.listAuditEvents(cursor, limit);
 }
 
 export function listDevices(): Promise<Device[]> {

@@ -37,7 +37,7 @@ export interface AppState {
 }
 
 export interface AppStoreDependencies {
-  api?: Pick<DashboardApiClient, "listHosts" | "login" | "register" | "logout">;
+  api?: Pick<DashboardApiClient, "listHosts" | "getMe" | "login" | "register" | "logout">;
   /** Runs after login/bootstrap succeed and after logout, in that order. */
   onAuthenticated?: () => void;
   onLoggedOut?: () => void;
@@ -112,8 +112,9 @@ export function createAppStore(dependencies: AppStoreDependencies = {}) {
     bootstrap: async () => {
       set({ status: "checking", bootstrapError: null });
       try {
-        await api.listHosts();
-        set({ status: "ready" });
+        const [me] = await Promise.all([api.getMe(), api.listHosts()]);
+        storeUser(me.user);
+        set({ status: "ready", user: me.user });
         dependencies.onAuthenticated?.();
       } catch (error) {
         if (error instanceof DashboardApiUnauthorizedError) {

@@ -1,5 +1,6 @@
 import type { Host } from "@getpaseo/dashboard-shared";
-import { Bot, Link2, Plus, Server, Trash2, Wifi } from "lucide-react";
+import { Bot, Link2, Pencil, Plus, Server, Trash2, Wifi } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SectionLabel } from "@/components/section-label";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ interface HostsPageProps {
   runtimes: ReadonlyMap<string, DashboardHostRuntimeState>;
   onAddHost: () => void;
   onRemoveHost: (host: Host) => void;
+  onRenameHost: (host: Host, label: string) => Promise<void>;
 }
 
 const statusTokens: Record<HostPresence, { color: string; className: string }> = {
@@ -21,9 +23,39 @@ const statusTokens: Record<HostPresence, { color: string; className: string }> =
   connecting: { color: "var(--warning)", className: "text-[var(--warning)]" },
 };
 
-export function HostsPage({ hosts, runtimes, onAddHost, onRemoveHost }: HostsPageProps) {
+export function HostsPage({
+  hosts,
+  runtimes,
+  onAddHost,
+  onRemoveHost,
+  onRenameHost,
+}: HostsPageProps) {
   const { t, i18n } = useTranslation();
   useReveal([hosts.length]);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingLabel, setEditingLabel] = useState("");
+  const [renameError, setRenameError] = useState<string | null>(null);
+
+  function startRename(host: Host) {
+    setEditingId(host.id);
+    setEditingLabel(host.label);
+    setRenameError(null);
+  }
+
+  async function commitRename(host: Host) {
+    const trimmed = editingLabel.trim();
+    if (!trimmed || trimmed === host.label) {
+      setEditingId(null);
+      return;
+    }
+    try {
+      await onRenameHost(host, trimmed);
+      setEditingId(null);
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : String(error));
+    }
+  }
 
   const online = hosts.filter((host) => hostPresence(runtimes.get(host.id)) === "online").length;
 
@@ -96,21 +128,54 @@ export function HostsPage({ hosts, runtimes, onAddHost, onRemoveHost }: HostsPag
                     />
                     {t(`hosts.status.${presence}`)}
                   </span>
-                  <div className="ml-1 hidden items-center gap-1 group-hover:flex">
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      className="hover:text-[var(--danger)]"
-                      title={t("hosts.removeHost")}
-                      onClick={() => onRemoveHost(host)}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
-                  </div>
+                  {editingId === host.id ? (
+                    <div className="ml-1 flex items-center gap-1">
+                      <input
+                        autoFocus
+                        className="w-32 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-muted)] px-2 py-1 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--foreground-muted)]"
+                        value={editingLabel}
+                        onChange={(e) => setEditingLabel(e.target.value)}
+                        onBlur={() => void commitRename(host)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") void commitRename(host);
+                          if (e.key === "Escape") setEditingId(null);
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="ml-1 hidden items-center gap-1 group-hover:flex">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        title={t("hosts.renameHost")}
+                        onClick={() => startRename(host)}
+                      >
+                        <Pencil size={14} />
+                      </Button>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        className="hover:text-[var(--danger)]"
+                        title={t("hosts.removeHost")}
+                        onClick={() => onRemoveHost(host)}
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
+          {renameError && (
+            <p
+              className="mt-2 text-[13px] text-[var(--danger)]"
+              data-reveal=""
+              style={revealDelay(2)}
+            >
+              {renameError}
+            </p>
+          )}
           <div
             className="mt-4 flex items-center gap-2 text-[13px] text-[var(--foreground-faint)]"
             data-reveal=""

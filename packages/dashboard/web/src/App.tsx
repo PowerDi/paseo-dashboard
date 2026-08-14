@@ -2,12 +2,13 @@ import type { Host } from "@getpaseo/dashboard-shared";
 import { LoaderCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { dashboardApi, deleteHost } from "./api/dashboardApi";
+import { dashboardApi, deleteHost, updateHost } from "./api/dashboardApi";
 import { ErrorAlertProvider } from "./components/error-alert";
 import { useHostRuntimes } from "./hooks/use-host-runtimes";
 import { Shell, type Page } from "./layouts/Shell";
 import { buildHostNodes, findAgentContext } from "./lib/agent-tree";
 import { AgentsPage } from "./pages/AgentsPage";
+import { AuditPage } from "./pages/AuditPage";
 import { DevicesPage } from "./pages/DevicesPage";
 import { HostsPage } from "./pages/HostsPage";
 import { ImportHostModal } from "./pages/ImportHostModal";
@@ -117,11 +118,14 @@ function AuthenticatedApp() {
 
   // Config events keep the host registry current across devices.
   useEffect(() => {
-    const subscription = dashboardApi.subscribeConfigEvents((event) => {
-      if (event.type === "host.upserted" || event.type === "host.deleted") {
-        void useHostSyncStore.getState().sync();
-      }
-    });
+    const subscription = dashboardApi.subscribeConfigEvents(
+      (event) => {
+        if (event.type === "host.upserted" || event.type === "host.deleted") {
+          void useHostSyncStore.getState().sync();
+        }
+      },
+      { reconnect: true },
+    );
     return () => subscription.close();
   }, []);
 
@@ -155,6 +159,11 @@ function AuthenticatedApp() {
     await deleteHost(host.id).catch(() => undefined);
     await useHostSyncStore.getState().sync();
     if (selection?.hostId === host.id) setSelection(null);
+  }
+
+  async function handleRenameHost(host: Host, label: string) {
+    await updateHost(host.id, { label, baseVersion: host.version });
+    await useHostSyncStore.getState().sync();
   }
 
   function selectAgent(hostId: string, agentId: string) {
@@ -206,6 +215,7 @@ function AuthenticatedApp() {
               runtimes={runtimes}
               onAddHost={openImport}
               onRemoveHost={(host) => void handleRemoveHost(host)}
+              onRenameHost={handleRenameHost}
             />
           )}
           {page === "agents" && (
@@ -220,6 +230,7 @@ function AuthenticatedApp() {
             />
           )}
           {page === "devices" && <DevicesPage />}
+          {page === "audit" && <AuditPage />}
           {page === "settings" && <SettingsPage />}
         </div>
       </Shell>

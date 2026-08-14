@@ -71,8 +71,8 @@ export class SseParser {
         this.dataLines.push(value);
         break;
       case "id":
-        // The server does not currently send ids. Preserve the SSE rule that
-        // an id containing a NUL is ignored rather than exposed to callers.
+        // Preserve the SSE rule that an id containing a NUL is ignored
+        // rather than exposed to callers.
         if (!value.includes("\u0000")) this.eventId = value;
         break;
       case "retry": {
@@ -121,6 +121,15 @@ export interface ConfigEventStreamOptions {
   onUnauthorized?: (error: DashboardEventsUnauthorizedError) => void;
   onClose?: () => void;
   signal?: AbortSignal;
+  /**
+   * When true, the stream reconnects automatically after the HTTP connection
+   * drops (network error, proxy timeout, server restart). The `Last-Event-ID`
+   * header is sent on each attempt so the server can suppress already-seen
+   * events. Uses exponential backoff capped at 30s. Defaults to false to keep
+   * the original one-shot semantics for callers that manage their own
+   * lifecycle.
+   */
+  reconnect?: boolean;
 }
 
 export interface ConfigEventSubscription {
@@ -140,13 +149,26 @@ export class DashboardEventsUnauthorizedError extends Error {
   }
 }
 
+const RECONNECT_BASE_DELAY_MS = 1_000;
+const RECONNECT_MAX_DELAY_MS = 30_000;
+
+function nextBackoffDelay(attempt: number, retryHint?: number): number {
+  if (retryHint !== undefined && retryHint > 0) return retryHint;
+  const exponential = RECONNECT_BASE_DELAY_MS * 2 ** Math.min(attempt, 5);
+  return Math.min(exponential, RECONNECT_MAX_DELAY_MS);
+}
+
 /**
  * Open the authenticated Dashboard configuration event stream.
  *
  * This stream carries notifications only. Callers should use the event's
  * revision to trigger host-sync polling; daemon data never passes through it.
- * There is no implicit reconnect loop: close the subscription and create a new
- * one when the login/session lifecycle says it is appropriate.
+ *
+ * When `reconnect` is true the stream reconnects automatically after a
+ * connection drop, sending `Last-Event-ID` so the server can suppress
+ * already-seen events. Otherwise the stream is one-shot: close the
+ * subscription and create a new one when the login/session lifecycle says
+ * it is appropriate.
  */
 export function createConfigEventStream(
   options: ConfigEventStreamOptions,
@@ -154,10 +176,14 @@ export function createConfigEventStream(
   const controller = new AbortController();
   const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
   const url = options.url ?? "/api/v1/events";
+  const wantReconnect = options.reconnect === true;
   let closed = false;
-  let settled = false;
+  let readyResolved = false;
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   let closeNotified = false;
+  let lastEventId: string | undefined;
+  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  let attempt = 0;
 
   let resolveReady!: () => void;
   let rejectReady!: (reason: unknown) => void;
@@ -176,11 +202,19 @@ export function createConfigEventStream(
     if (!closed) options.onError?.(error);
   };
 
+  const clearReconnectTimer = () => {
+    if (reconnectTimer !== undefined) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = undefined;
+    }
+  };
+
   const close = () => {
     if (closed) return;
     closed = true;
-    if (!settled) {
-      settled = true;
+    clearReconnectTimer();
+    if (!readyResolved) {
+      readyResolved = true;
       resolveReady();
     }
     controller.abort();
@@ -193,10 +227,11 @@ export function createConfigEventStream(
     else options.signal.addEventListener("abort", close, { once: true });
   }
 
-  const run = async () => {
+  const runOnce = async (): Promise<"done" | "reconnect"> => {
     try {
       const headers = new Headers({ Accept: "text/event-stream" });
       if (options.accessToken) headers.set("Authorization", `Bearer ${options.accessToken}`);
+      if (lastEventId !== undefined) headers.set("Last-Event-ID", lastEventId);
 
       const response = await fetchImpl(url, {
         method: "GET",
@@ -211,11 +246,14 @@ export function createConfigEventStream(
         throw error;
       }
       if (!response.ok) throw new Error(`Dashboard events request failed: ${response.status}`);
-      if (closed) return;
+      if (closed) return "done";
       if (!response.body) throw new Error("Dashboard events response has no body");
 
-      settled = true;
-      resolveReady();
+      if (!readyResolved) {
+        readyResolved = true;
+        resolveReady();
+      }
+      attempt = 0;
       reader = response.body.getReader();
       const decoder = new TextDecoder();
       const parser = new SseParser();
@@ -224,28 +262,51 @@ export function createConfigEventStream(
         const result = await reader.read();
         if (result.done) break;
         for (const message of parser.push(decoder.decode(result.value, { stream: true }))) {
+          if (message.id !== undefined) lastEventId = message.id;
           dispatchConfigMessage(message, options, notifyError);
         }
       }
 
       if (!closed) {
         for (const message of parser.push(decoder.decode())) {
+          if (message.id !== undefined) lastEventId = message.id;
           dispatchConfigMessage(message, options, notifyError);
         }
         for (const message of parser.finish()) {
+          if (message.id !== undefined) lastEventId = message.id;
           dispatchConfigMessage(message, options, notifyError);
         }
       }
+
+      return closed ? "done" : "reconnect";
     } catch (error) {
-      if (!settled) {
-        settled = true;
+      if (!readyResolved) {
+        readyResolved = true;
         if (closed && error instanceof DOMException && error.name === "AbortError") resolveReady();
         else rejectReady(error);
       }
       if (!(closed && isAbortError(error))) notifyError(error);
+      return closed ? "done" : "reconnect";
     } finally {
       reader?.releaseLock();
       reader = undefined;
+    }
+  };
+
+  const run = async () => {
+    try {
+      let result = await runOnce();
+      while (result === "reconnect" && wantReconnect && !closed) {
+        const delay = nextBackoffDelay(attempt);
+        attempt += 1;
+        await new Promise<void>((resolve) => {
+          reconnectTimer = setTimeout(resolve, delay);
+        });
+        reconnectTimer = undefined;
+        if (closed) break;
+        result = await runOnce();
+      }
+    } finally {
       if (options.signal) options.signal.removeEventListener("abort", close);
       notifyClose();
     }

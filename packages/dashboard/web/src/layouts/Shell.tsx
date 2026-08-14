@@ -11,6 +11,7 @@ import {
   Search,
   Server,
   Settings,
+  Shield,
   SquarePen,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -20,7 +21,7 @@ import { SessionStatusMarker } from "@/components/session-status-marker";
 import type { HostPresence, SidebarHostNode, SidebarSessionNode } from "@/lib/agent-tree";
 import { cn } from "@/lib/utils";
 
-export type Page = "workspace" | "hosts" | "agents" | "devices" | "settings";
+export type Page = "workspace" | "hosts" | "agents" | "devices" | "audit" | "settings";
 
 interface ShellProps {
   page: Page;
@@ -33,10 +34,15 @@ interface ShellProps {
   onSelectSession: (session: SidebarSessionNode) => void;
 }
 
-const secondaryNav: { id: Page; labelKey: "hosts" | "agents" | "devices"; icon: ReactNode }[] = [
+const secondaryNav: {
+  id: Page;
+  labelKey: "hosts" | "agents" | "devices" | "audit";
+  icon: ReactNode;
+}[] = [
   { id: "hosts", labelKey: "hosts", icon: <Server size={16} /> },
   { id: "agents", labelKey: "agents", icon: <Bot size={16} /> },
   { id: "devices", labelKey: "devices", icon: <KeyRound size={16} /> },
+  { id: "audit", labelKey: "audit", icon: <Shield size={16} /> },
 ];
 
 function presenceColor(presence: HostPresence): string {

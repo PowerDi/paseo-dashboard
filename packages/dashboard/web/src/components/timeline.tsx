@@ -1,10 +1,10 @@
 import type { AgentTimelineItem } from "@getpaseo/protocol/agent-types";
-import { Check, ChevronUp, Circle, LoaderCircle } from "lucide-react";
+import { Check, Circle, LoaderCircle } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { CodeBlock } from "@/components/code-block";
 import { MarkdownContent } from "@/components/markdown-content";
 import { TimelineLiveStatus } from "@/components/timeline-live-status";
-import { Button } from "@/components/ui/button";
 import type { LiveActivity } from "@/lib/live-activity";
 import { toolCallBody, toolCallSummary } from "@/lib/tool-call";
 import type { AgentTimelineState, TimelineEntry } from "@/stores/timeline-store";
@@ -108,6 +108,43 @@ function TimelineItemView({ entry }: { entry: TimelineEntry }) {
   }
 }
 
+function LoadOlderSentinel({
+  loading,
+  onLoadOlder,
+}: {
+  loading: boolean;
+  onLoadOlder: () => void;
+}) {
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const element = sentinelRef.current;
+    if (!element) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && !loading) {
+            onLoadOlder();
+          }
+        }
+      },
+      // Trigger when the sentinel is within 200px of the viewport so the
+      // next page is fetched before the user reaches the absolute top.
+      { rootMargin: "200px" },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [loading, onLoadOlder]);
+
+  return (
+    <div ref={sentinelRef} className="flex justify-center py-2">
+      {loading && (
+        <LoaderCircle size={14} className="animate-spin text-[var(--foreground-faint)]" />
+      )}
+    </div>
+  );
+}
+
 export function TimelineView({
   timeline,
   liveActivity,
@@ -130,22 +167,7 @@ export function TimelineView({
   return (
     <div className="space-y-3">
       {timeline.hasOlder && (
-        <div className="flex justify-center">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-[var(--foreground-faint)]"
-            disabled={timeline.loadingOlder}
-            onClick={onLoadOlder}
-          >
-            {timeline.loadingOlder ? (
-              <LoaderCircle size={13} className="animate-spin" />
-            ) : (
-              <ChevronUp size={13} />
-            )}
-            {t("workspace.timeline.loadOlder")}
-          </Button>
-        </div>
+        <LoadOlderSentinel loading={timeline.loadingOlder} onLoadOlder={onLoadOlder} />
       )}
       {timeline.error && (
         <p className="text-center text-[13px] text-[var(--danger)]">

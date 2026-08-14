@@ -27,7 +27,7 @@
 | `server/`             | `docs/architecture.md`、`docs/security.md`、`docs/product-requirements.md`、`docs/local-development.md`                        | User/Session/Device/Host 数据、API、加密、审计；禁止进入 daemon 数据面、Origin 校验               |
 | `packages/contracts/` | `docs/architecture.md`、`docs/product-requirements.md`、`docs/security.md`                                                     | API 请求/响应、错误 code、Host sync、敏感字段边界                                                 |
 | `tests/contract/`     | `docs/architecture.md`、`docs/product-requirements.md`                                                                         | Web/Harmony/Server 对同一 API 的一致理解                                                          |
-| `tests/e2e/`          | `docs/product-requirements.md`、`docs/security.md`、`docs/roadmap.md`                                                          | 用户流程、验收标准、数据路径和泄露检查                                                            |
+| `tests/e2e/`          | `docs/product-requirements.md`、`docs/security.md`、`docs/roadmap.md`、`docs/compatibility-matrix.md`                          | 用户流程、验收标准、数据路径和泄露检查、daemon 版本兼容性                                         |
 | `docs/`               | 先读要修改主题的现有文档，再读 `docs/open-decisions.md`                                                                        | 修改原有结论，不在多个文档重复同一事实                                                            |
 
 ### 按功能追加阅读
@@ -44,6 +44,7 @@
 | Relay E2EE 或 pairing key 轮换                 | `docs/security.md`、`docs/paseo-integration.md`、Paseo `SECURITY.md` 和 Relay/server 的真实实现                                                        |
 | 选择框架、数据库或处理未决架构                 | `docs/open-decisions.md`；做出决定后更新拥有该事实的主题文档                                                                                           |
 | 规划开发阶段或判断功能是否进入当前版本         | `docs/roadmap.md` 和 `docs/product-requirements.md` 的目标/非目标                                                                                      |
+| 添加新 feature gate 或验证版本兼容性           | `docs/compatibility-matrix.md`、Paseo 的 `docs/protocol-compatibility.md`                                                                              |
 
 ### 文档优先级
 

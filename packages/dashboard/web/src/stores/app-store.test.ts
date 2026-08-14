@@ -12,6 +12,7 @@ const loginResponse: LoginResponse = {
 function createApiStub(overrides: Partial<NonNullable<AppStoreDependencies["api"]>> = {}) {
   return {
     listHosts: vi.fn(async (): Promise<Host[]> => []),
+    getMe: vi.fn(async () => ({ user: loginResponse.user })),
     login: vi.fn(async () => loginResponse),
     register: vi.fn(async () => loginResponse),
     logout: vi.fn(async () => ({ ok: true })),
@@ -33,6 +34,16 @@ describe("app store bootstrap", () => {
 
     expect(store.getState().status).toBe("ready");
     expect(onAuthenticated).toHaveBeenCalledTimes(1);
+  });
+
+  it("fetches the current user during bootstrap", async () => {
+    const api = createApiStub();
+    const store = createAppStore({ api });
+
+    await store.getState().bootstrap();
+
+    expect(api.getMe).toHaveBeenCalledOnce();
+    expect(store.getState().user?.email).toBe("user@example.com");
   });
 
   it("becomes unauthenticated on 401", async () => {

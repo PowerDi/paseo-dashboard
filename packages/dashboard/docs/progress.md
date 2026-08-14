@@ -9,7 +9,7 @@
 - **仓库**：Paseo monorepo fork — `git@github.com:PowerDi/paseo-dashboard.git`
 - **代码位置**：`/root/workspace/code/paseo/packages/dashboard/`
 - **Paseo 源码**：`/root/workspace/code/paseo/`（monorepo 根，作为行为事实来源）
-- **当前阶段**：M3 进行中。P3.1 完成 2/3（缺 feature gating）、P3.2 全部完成（创建/恢复在 P3.4 落地）、P3.3 全部完成（Timeline + Terminal + 大数据量处理）、P3.4 全部完成（Prompt + 新建会话 + 恢复 + 权限请求）。
+- **当前阶段**：M3 进行中。P3.1-P3.4 全部完成。P3.6 历史 Web 缺口补齐已完成（GET /me、SSE 重连、Host 改名、修改密码、审计页面）。
 - **当前分支**：`feat/dashboard-migration`（P3.1-P3.3 已提交，见 Git 状态）
 
 ## Git 协作
@@ -38,7 +38,9 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 | `docs/security.md`             | 保护目标、信任边界、pairing 安全、存储加密、认证方案、撤销语义、审计规则、安全测试           | 所有安全相关任务                   |
 | `docs/deployment.md`           | 部署指南：环境变量、KEK 管理、反代、备份、安全检查清单                                       | 部署和运维                         |
 | `docs/ui.md`                   | Dashboard Web 视觉与交互：Zeno 参照、层叠、composer/侧栏/运行状态、禁止项                    | 改 `web/` 页面、组件、CSS 前必读   |
-| `docs/local-development.md`    | 本地开发指南：快速启动、Origin 校验、环境变量、常见问题、调试技巧                            | 本地开发与排查问题时必读            |
+| `docs/local-development.md`    | 本地开发快速启动、Origin 校验、环境变量、常见问题（403/新建会话/Live Status）                | 本地开发与调试                     |
+| `docs/compatibility-matrix.md` | Daemon 版本兼容矩阵、feature gating 列表、添加新 gate 流程、COMPAT 标签清理                  | 添加 feature gate 或验证版本兼容性 |
+| `docs/local-development.md`    | 本地开发指南：快速启动、Origin 校验、环境变量、常见问题、调试技巧                            | 本地开发与排查问题时必读           |
 
 ## 当前状态
 
@@ -76,6 +78,8 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 - [x] **UI 打磨第一轮（对齐 zeno desktop）**：timeline 的 assistant 消息改 `components/markdown-content.tsx`（react-markdown + remark-gfm + rehype-sanitize），代码围栏和 tool_call 输出走 `components/code-block.tsx`（highlight.js 精简语言集 + 语言标签 + 复制按钮；`edit` 工具的 unifiedDiff 走 diff 行渲染，带行号与增删底色，解析逻辑 `lib/diff-lines.ts` 从 zeno `process-activity.ts` 移植，4 单测）。从 zeno 搬 4 个 radix 基础组件（select/dialog/alert-dialog/tooltip）+ `tw-animate-css`；新建会话的两个原生 `<select>` 换成 radix Select（popper 定位在 composer 上方），全部 `window.alert` 换成 `components/error-alert.tsx` 的 AlertDialog（context + `useErrorAlert()`）；两个 composer 接 `hooks/use-autosize-textarea.ts`（56→126px 实测）。样式在 `globals.css` 追加 `.dash-md` 与 `.content-code-block`/`.content-diff-*` 段，补 `--popover` token 映射。**顺带修了既有依赖不一致**：dashboard/web 的 package.json 写 `react ^19.1.0`，lockfile 却一直钉在 18.3.1（npm 标 invalid），react-markdown 的类型把它暴露出来——对齐到 19 后 `main.tsx` 里那条 react-router `@ts-expect-error` 也不再需要，已删。web 单测 77→84；typecheck/lint/format/build 通过；Playwright 实测 markdown（标题/列表/表格/行内码/python 高亮 8 个 token）、radix 下拉、autosize。
 - [x] **P3.4 Prompt 与权限请求**：runtime 新增 `sendAgentMessage`/`createAgent`/`resumeAgent`/`respondToPermission`（`DaemonClientLike` Pick 同步扩展，5 单测）。Workspace composer 接真实发消息（Enter 发送、发送中禁用）；空态 composer 变成新建会话入口（`components/new-session-composer.tsx`：主机·项目下拉 + provider 下拉（协议包 `AGENT_PROVIDER_DEFINITIONS`）+ initialPrompt，创建后自动选中）；Agents 页新增「已归档」区（`buildArchivedAgentRows` + 单测），带 `persistence` handle 的可恢复（恢复后选中返回快照的 id，防 id 变化）；权限卡片 `components/permission-requests.tsx` 渲染 `pendingPermissions`（`actions` 有则按 behavior/variant 出按钮，无则默认允许/拒绝），响应后本地先移除等广播兜底。Playwright 实测（真实 daemon + codex）：空态创建 → prompt 进 timeline → 精确回复 → composer 追发 → 回复 → 归档 → 已归档区可见。权限卡片真实触发未复现（codex 该模式自动放行），响应链路由单测覆盖。
 - [x] **UI 打磨第二轮（交互结构 + 层叠修复）**：composer 改 protrusion 条焊输入卡片（`components/composer-shell.tsx`），发送按钮独立底栏；侧栏「添加主机」改次级动作（虚线方标，不再复用 nav-item）；运行状态两层——侧栏 `SessionStatusMarker`（running 转圈 / error 红叉）、时间线末尾 `TimelineLiveStatus`（shimmer + 计时，phase 由 `deriveLiveActivity` 从最新条目推断）；用户消息右对齐气泡；header 状态/视图/操作分组；上翻出回到底部按钮。**根因修复**：`globals.css` 无层级 `* { padding: 0 }` 压过 Tailwind `@layer utilities`，全站间距工具类失效（权限卡片 `p-3.5` 计算值 0）——重置迁入 `@layer base`，盒模型实测 padding 0→14px。web 包加 `test` 脚本（自有 vite alias，避开根配置把 `@` 指到 app）；`test:dashboard` 纳入 web。单测 84→94。约定已写入 [`docs/ui.md`](./ui.md)，Cursor 规则 `.cursor/rules/dashboard-ui.mdc`。
+- [x] **Bug 修复（Live Status 计时 + Origin 文档）**：`live-activity.ts` 的 `deriveLiveActivity` 修正——如果最后一条 timeline entry 是 `assistant_message`，即使 status 还是 "running" 也返回 null（避免回复完成后仍计时）；6 个单测同步修正。新增 `docs/local-development.md` 完整开发指南（Origin 校验说明、环境变量、常见问题 403/新建会话/Live Status）。单测 94→104。commit `01ea5125f` + `08abec18c`。
+- [x] **P3.5 兼容性测试**：`tests/e2e/src/compatibility.vitest.test.ts` 新增 15 个兼容性测试（feature detection 7 个、兼容性判断 4 个、feature gating 行为 4 个），覆盖 v0.1.80/v0.1.81/v0.1.106 daemon 版本矩阵；`docs/compatibility-matrix.md` 记录版本矩阵、特性门控列表（selectiveAgentTimeline/terminalRestoreModes）、添加新 gate 流程、COMPAT 标签清理规则；`AGENTS.md` 文档地图新增兼容性条目。E2E 测试 8→23。commit `<待提交>`。
 
 ### 迁移变更记录
 
@@ -95,13 +99,18 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 
 ### 待开始
 
-按依赖排序。1 阻塞 M3 退出，2 是 M1/M2 被跳过的历史缺口（服务端做了、Web 端没接）。
+1. Timeline 后续优化：流式期间仍靠节流 tail 重拉（400ms/次，limit 50），未做增量 stream reducer。「加载更早」已从按钮改为 `IntersectionObserver` 滚动哨兵（200px 预触发）。权限卡片的真实弹出流程也待一次带审批模式的实测。
+2. 另有 `roadmap.md` M3 范围里的「路由」未做，要不要在 M3 内补取决于是否需要深链。
+3. 后续见 docs/development-plan.md 的完整序列。
 
-1. **P3.5 兼容性测试**（当前优先）— daemon 版本矩阵 smoke tests。
-   另有 `roadmap.md` M3 范围里的「路由」未做（见下面「Web 数据接线」的路由说明），要不要在 M3 内补取决于是否需要深链。
-2. **P3.6 历史 Web 缺口补齐** — 服务端路由已实现、Web 端完全没接的四项：`POST /auth/change-password`（P1.1 记为完成，但没有页面和 client 方法）、`PATCH /hosts/:id` 改名（P1.2 的乐观并发 409 路径 Web 端从未调用过）、`GET /audit-events`（P2.4 完成，产品需求里「审计记录」是独立页面）、`GET /me`（`app-store` 现在用 localStorage 缓存 user，刷新后靠缓存显示邮箱，有 `/me` 可以直接取）。另加 SSE 重连：server 已发 `id:` 并支持 `Last-Event-ID`，`dashboardEvents.ts` 能解析 id 但从不回传，也没有重连循环——流断掉（代理超时/网络抖动）后 Host 配置更新静默停止，直到用户刷新页面。web 单测已进 `test:dashboard`；CI 仍不跑 dashboard。development-plan.md 已补 P3.6 小节。
-3. Timeline 后续优化（记录，不阻塞）：流式期间靠节流 tail 重拉（400ms/次，limit 50），未做增量 stream reducer；「加载更早」是按钮而非滚动哨兵。权限卡片的真实弹出流程也待一次带审批模式的实测。
-4. 后续见 docs/development-plan.md 的完整序列。
+### 已完成 P3.6（历史 Web 缺口补齐）
+
+- **GET /me 接线**：`dashboardApi.getMe()` + `app-store.bootstrap()` 改为 `Promise.all([getMe, listHosts])`，刷新后不再依赖 localStorage 缓存显示邮箱。
+- **SSE 重连**：`createConfigEventStream` 新增 `reconnect` 选项，断流后指数退避重连（1s→30s 上限），回传 `Last-Event-ID` 让 server 跳过已发事件。`App.tsx` 订阅时启用 `reconnect: true`。新增 2 个单测（重连 + Last-Event-ID 回传、不重连验证）。
+- **Host 改名**：`dashboardApi.updateHost()` client 方法 + `HostsPage` 内联编辑（铅笔图标 → input → Enter/Esc/blur 提交，乐观并发 `baseVersion`）。
+- **修改密码**：`dashboardApi.changePassword()` client 方法 + `SettingsPage` 新增 `ChangePasswordSection`（当前/新/确认密码 + 显示切换 + 验证 + 成功/错误提示）。
+- **审计记录页面**：`dashboardApi.listAuditEvents()` client 方法 + 新 `AuditPage`（分页加载、事件类型翻译、时间显示）。侧栏新增审计入口（Shield 图标）。
+- web 单测 16 个通过（dashboardEvents 6 + dashboardApi 2 + app-store 8）；typecheck/lint/format 通过。
 
 ## 关键约束（回答问题时必须遵守）
 
@@ -226,9 +235,9 @@ npm run typecheck:dashboard
 ### 测试统计
 
 - web 单测 **104**（14 文件：dashboardApi 1、dashboardEvents 4、connectionManager 7、dashboardRuntime 17、daemon-data-store 12、timeline-store 11、terminalSession 8、app-store 7、agent-tree 10、diff-lines 4、code-language 3、live-activity 6、format-time 4、features 10）。2026-08-14 实跑 14 文件 104 通过。
-- contract **79**（server-auth 16、server-security 14、server-events 14、server-hosts 13、server-sync 8、server-devices-sessions 9、auth 2、host-sync 3）+ e2e vitest **8**（connection-manager 4、offer-parser 3、placeholder 1）= 静态统计 **191** 含 web。
+- contract **79**（server-auth 16、server-security 14、server-events 14、server-hosts 13、server-sync 8、server-devices-sessions 9、auth 2、host-sync 3）+ e2e vitest **23**（connection-manager 4、offer-parser 3、compatibility 15、placeholder 1）= 静态统计 **206** 含 web。
 - Playwright 浏览器 E2E 3 测试（需 `PLAYWRIGHT_BROWSERS_PATH=/tmp/playwright-browsers`）。
-- **web 单测**：`packages/dashboard/web/package.json` 有 `test` 脚本，走该包自己的 `vite.config.ts`（`@` 指向 `web/src`）。根 `vitest.config.ts` 仍把 `@` 指到 `packages/app/src`，所以从仓库根直接 `npx vitest run packages/dashboard/web/src` 会错；用 `npm run test --workspace=@getpaseo/dashboard-web`。`test:dashboard` 现已包含 web。feature gating 10 单测在 `features.test.ts`。
+- **web 单测**：`packages/dashboard/web/package.json` 有 `test` 脚本，走该包自己的 `vite.config.ts`（`@` 指向 `web/src`）。根 `vitest.config.ts` 仍把 `@` 指到 `packages/app/src`，所以从仓库根直接 `npx vitest run packages/dashboard/web/src` 会错；用 `npm run test --workspace=@getpaseo/dashboard-web`。`test:dashboard` 现已包含 web。P3.5 兼容性测试 15 单测在 `tests/e2e/src/compatibility.vitest.test.ts`。
 - **CI 完全不跑 dashboard 测试**：`.github/workflows/ci.yml` 的测试 job 都是 `npm run test --workspace=<pkg>` 点名指定，没有 dashboard。根 `npm run typecheck`/`lint`/`format:check` 是 `--workspaces`，这三项覆盖到了。
 - Lefthook pre-commit hook 会跑全 monorepo typecheck（含 app/desktop/cli），这些包有预先存在的 typecheck 错误，不是 dashboard 引入的。dashboard 的 `typecheck:dashboard` 全部通过。提交时可用 `--no-verify` 绕过。
 

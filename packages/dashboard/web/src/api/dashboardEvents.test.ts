@@ -89,3 +89,78 @@ describe("createConfigEventStream", () => {
     expect(unauthorized).toHaveBeenCalledOnce();
   });
 });
+
+describe("createConfigEventStream reconnect", () => {
+  it("reconnects with Last-Event-ID after the stream ends", async () => {
+    let attempt = 0;
+    const seenHeaders: Headers[] = [];
+    const fetchMock = vi.fn<typeof fetch>(async () => {
+      attempt += 1;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          if (attempt === 1) {
+            controller.enqueue(
+              new TextEncoder().encode(`id: 3\ndata: ${JSON.stringify(configEvent(3))}\n\n`),
+            );
+          }
+          controller.close();
+        },
+      });
+      const response = new Response(body, { status: 200 });
+      // Capture headers after the fetch wrapper sets them.
+      const originalHeadersGet = response.headers.get.bind(response.headers);
+      response.headers.get = (name: string) => {
+        if (name === "Last-Event-ID") {
+          return seenHeaders[attempt - 1]?.get("Last-Event-ID") ?? null;
+        }
+        return originalHeadersGet(name);
+      };
+      // Patch: we need the request headers, not response headers.
+      return response;
+    });
+
+    // We need to inspect request headers — wrap fetch to capture them.
+    const wrappedFetch = vi.fn<typeof fetch>(async (input, init) => {
+      seenHeaders.push(init?.headers as Headers);
+      return fetchMock(input, init);
+    });
+
+    const onEvent = vi.fn();
+    const subscription = createConfigEventStream({
+      fetch: wrappedFetch,
+      onEvent,
+      reconnect: true,
+    });
+
+    await subscription.ready;
+    await vi.waitFor(() => expect(onEvent).toHaveBeenCalledWith(configEvent(3)));
+
+    // Wait for reconnect attempt
+    await vi.waitFor(() => expect(attempt).toBeGreaterThanOrEqual(2));
+    expect(seenHeaders[1]?.get("Last-Event-ID")).toBe("3");
+
+    subscription.close();
+  });
+
+  it("does not reconnect when reconnect is false", async () => {
+    let attempt = 0;
+    const fetchMock = vi.fn<typeof fetch>(async () => {
+      attempt += 1;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.close();
+        },
+      });
+      return new Response(body, { status: 200 });
+    });
+
+    const subscription = createConfigEventStream({
+      fetch: fetchMock,
+      onEvent: vi.fn(),
+    });
+    await subscription.ready;
+    await new Promise((r) => setTimeout(r, 200));
+    expect(attempt).toBe(1);
+    subscription.close();
+  });
+});
