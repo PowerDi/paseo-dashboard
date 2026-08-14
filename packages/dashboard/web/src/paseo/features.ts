@@ -24,6 +24,13 @@ export interface DaemonFeatures {
    * Added in v0.1.81.
    */
   terminalRestoreModes: boolean;
+
+  /**
+   * Agent config apply: daemon supports applying a config bundle (modelId,
+   * modeId, thinkingOptionId, featureValues) to an existing agent via
+   * agent.config.apply RPC. Added in v0.3.2.
+   */
+  agentConfigApply: boolean;
 }
 
 /**
@@ -35,6 +42,7 @@ export function getDaemonFeatures(serverInfo: ServerInfoStatusPayload | null): D
   return {
     selectiveAgentTimeline: features.selectiveAgentTimeline === true,
     terminalRestoreModes: features["terminal-restore-modes"] === true,
+    agentConfigApply: features.agentConfigApply === true,
   };
 }
 

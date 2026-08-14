@@ -245,6 +245,12 @@ class RuntimeClient implements DaemonClientLike, DaemonDataClient {
     archivedAt: null,
   })) as unknown as DaemonClientLike["resumeAgent"];
   readonly respondToPermission = vi.fn(async () => undefined);
+  readonly applyAgentConfig = vi.fn(async () => null);
+  readonly getProvidersSnapshot = vi.fn(async () => ({
+    entries: [],
+    generatedAt: "",
+    requestId: "",
+  }));
 
   listTerminals(): never {
     throw new Error("not implemented in fake");

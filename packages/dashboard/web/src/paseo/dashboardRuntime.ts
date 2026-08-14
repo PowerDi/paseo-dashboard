@@ -27,6 +27,8 @@ import {
   type TerminalSize,
 } from "./terminalSession";
 import { getDaemonFeatures } from "./features";
+import type { AgentConfigApply, ServerInfoStatusPayload } from "@getpaseo/protocol/messages";
+import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
 
 export interface DashboardTerminalInfo {
   id: string;
@@ -46,6 +48,7 @@ export interface DashboardPaseoRuntime {
   disconnectHost(hostId: string): Promise<void>;
   disconnectAll(): Promise<void>;
   get(hostId: string): DashboardHostRuntimeState;
+  getServerInfo(hostId: string): ServerInfoStatusPayload | null;
   subscribe(hostId: string, listener: DashboardRuntimeListener): () => void;
   /**
    * Connects to the host, reads the daemon version from server_info, and
@@ -68,6 +71,9 @@ export interface DashboardPaseoRuntime {
     requestId: string,
     response: AgentPermissionResponse,
   ): Promise<void>;
+  applyAgentConfig(hostId: string, agentId: string, config: AgentConfigApply): Promise<void>;
+  applyAgentConfig(hostId: string, agentId: string, config: AgentConfigApply): Promise<void>;
+  getProvidersSnapshot(hostId: string, cwd?: string): Promise<readonly ProviderSnapshotEntry[]>;
   /**
    * Marks an agent as viewed: subscribes the daemon's selective timeline
    * stream to it and loads the latest tail page.
@@ -133,6 +139,10 @@ export function createDashboardRuntime(
       connection: connectionManager.getState(hostId),
       daemonData: daemonDataStore.getState().byHost.get(hostId) ?? null,
     };
+  }
+
+  function getServerInfo(hostId: string): ServerInfoStatusPayload | null {
+    return connectionManager.getDaemonClient(hostId)?.getLastServerInfoMessage() ?? null;
   }
 
   function detach(hostId: string): void {
@@ -293,6 +303,8 @@ export function createDashboardRuntime(
 
     async respondToPermission(hostId, agentId, requestId, response) {
       await requireClient(hostId).respondToPermission(agentId, requestId, response);
+      // -- clear local (duplicated below)
+
       // Clear the request locally; the daemon's agent_update broadcast is the
       // source of truth but can lag behind the click.
       const entry = daemonDataStore
@@ -310,6 +322,15 @@ export function createDashboardRuntime(
         },
         project: entry.project,
       });
+    },
+
+    async applyAgentConfig(hostId, agentId, config) {
+      await requireClient(hostId).applyAgentConfig(agentId, config);
+    },
+
+    async getProvidersSnapshot(hostId, cwd) {
+      const response = await requireClient(hostId).getProvidersSnapshot(cwd ? { cwd } : undefined);
+      return response.entries ?? [];
     },
 
     async viewAgent(hostId, agentId) {
@@ -383,6 +404,7 @@ export function createDashboardRuntime(
     },
 
     get,
+    getServerInfo,
 
     subscribe(hostId, listener) {
       let current = get(hostId);

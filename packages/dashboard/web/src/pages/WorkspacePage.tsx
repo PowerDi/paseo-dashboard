@@ -10,11 +10,19 @@ import {
   Terminal,
 } from "lucide-react";
 import type { Host } from "@getpaseo/dashboard-shared";
+import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ComposerField, ComposerSendButton, ComposerShell } from "@/components/composer-shell";
 import { useErrorAlert } from "@/components/error-alert";
 import { NewSessionComposer } from "@/components/new-session-composer";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PermissionRequests } from "@/components/permission-requests";
 import { TimelineView } from "@/components/timeline";
 import { WorkspaceTerminal } from "@/components/workspace-terminal";
@@ -22,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { useAgentTimeline } from "@/hooks/use-agent-timeline";
 import { useAutosizeTextarea } from "@/hooks/use-autosize-textarea";
 import type { AgentContext } from "@/lib/agent-tree";
+import { getDaemonFeatures } from "@/paseo/features";
 import { sessionStatus } from "@/lib/agent-tree";
 import { formatDateTime } from "@/lib/format-time";
 import { deriveLiveActivity } from "@/lib/live-activity";
@@ -36,6 +45,7 @@ interface WorkspacePageProps {
   onSelectAgent: (hostId: string, agentId: string) => void;
   onCancelAgent: (hostId: string, agentId: string) => Promise<void>;
   onArchiveAgent: (hostId: string, agentId: string) => Promise<void>;
+  preselectedProjectKey: string | null;
 }
 
 /** Distance from the bottom that still counts as "following the stream". */
@@ -66,6 +76,7 @@ export function WorkspacePage({
   onSelectAgent,
   onCancelAgent,
   onArchiveAgent,
+  preselectedProjectKey,
 }: WorkspacePageProps) {
   const { t, i18n } = useTranslation();
   const showError = useErrorAlert();
@@ -74,6 +85,7 @@ export function WorkspacePage({
   const [sending, setSending] = useState(false);
   const [pending, setPending] = useState<"cancel" | "archive" | null>(null);
   const [view, setView] = useState<"timeline" | "terminal">("timeline");
+  const [providersSnapshot, setProvidersSnapshot] = useState<readonly ProviderSnapshotEntry[]>([]);
   const agentId = context?.entry.agent.id ?? null;
   const hostId = context?.host.id ?? null;
   const { timeline, loadOlder } = useAgentTimeline(hostId, agentId);
@@ -104,7 +116,37 @@ export function WorkspacePage({
     setAtBottom(true);
     setView("timeline");
     setDraft("");
+    setProvidersSnapshot([]);
   }, [agentId]);
+
+  // Fetch provider models when the agent is loaded and the daemon supports config apply.
+  const supportsConfigApply = (() => {
+    if (!hostId) return false;
+    const serverInfo = dashboardRuntime.getServerInfo(hostId);
+    return getDaemonFeatures(serverInfo).agentConfigApply;
+  })();
+
+  const availableModels = (() => {
+    const providerName = context?.entry.agent.provider ?? "";
+    const providerEntry = providersSnapshot.find((entry) => entry.provider === providerName);
+    return providerEntry?.models ?? [];
+  })();
+
+  useEffect(() => {
+    const agentProvider = context?.entry.agent.provider;
+    const agentCwd = context?.entry.agent.cwd;
+    if (!hostId || !supportsConfigApply || !agentProvider) return;
+    let cancelled = false;
+    void dashboardRuntime
+      .getProvidersSnapshot(hostId, agentCwd)
+      .then((entries) => {
+        if (!cancelled) setProvidersSnapshot(entries);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [hostId, supportsConfigApply, context?.entry.agent.provider, context?.entry.agent.cwd]);
 
   const handleScroll = useCallback(() => {
     const container = scrollRef.current;
@@ -166,7 +208,12 @@ export function WorkspacePage({
           <p className="workspace-empty-title">{t("workspace.emptyTitle")}</p>
           <p className="workspace-empty-subtitle">{t("workspace.emptySubtitle")}</p>
         </div>
-        <NewSessionComposer hosts={hosts} runtimes={runtimes} onCreated={onSelectAgent} />
+        <NewSessionComposer
+          hosts={hosts}
+          runtimes={runtimes}
+          onCreated={onSelectAgent}
+          preselectedProjectKey={preselectedProjectKey}
+        />
       </>
     );
   }
@@ -259,11 +306,53 @@ export function WorkspacePage({
             >
               <div className="mb-4 rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-panel)] p-4">
                 <div className="space-y-2.5">
-                  <MetaRow
-                    icon={<Bot size={13} />}
-                    label={t("workspace.meta.provider")}
-                    value={agent.model ? `${agent.provider} · ${agent.model}` : agent.provider}
-                  />
+                  <div className="flex items-baseline gap-2 text-[13px]">
+                    <span className="inline-flex w-24 shrink-0 items-center gap-1.5 text-[var(--foreground-subtle)]">
+                      <span className="translate-y-[1px]">
+                        <Bot size={13} />
+                      </span>
+                      {t("workspace.meta.provider")}
+                    </span>
+                    <div className="min-w-0 break-all text-[var(--foreground-muted)]">
+                      {supportsConfigApply && availableModels.length > 0 ? (
+                        <Select
+                          value={agent.model ?? ""}
+                          onValueChange={async (modelId) => {
+                            if (!hostId || !agentId) return;
+                            try {
+                              await dashboardRuntime.applyAgentConfig(hostId, agentId, {
+                                modelId,
+                              });
+                            } catch (error) {
+                              showError(
+                                t("agents.actionFailed", {
+                                  message: error instanceof Error ? error.message : String(error),
+                                }),
+                              );
+                            }
+                          }}
+                        >
+                          <SelectTrigger
+                            size="sm"
+                            className="inline-flex w-auto max-w-[240px] gap-1"
+                          >
+                            <SelectValue placeholder={agent.provider} />
+                          </SelectTrigger>
+                          <SelectContent position="popper" align="start" side="top" sideOffset={6}>
+                            {availableModels.map((model) => (
+                              <SelectItem key={model.id} value={model.id}>
+                                {model.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span>
+                          {agent.model ? `${agent.provider} · ${agent.model}` : agent.provider}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   <MetaRow
                     icon={<Terminal size={13} />}
                     label={t("workspace.meta.directory")}

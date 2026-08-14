@@ -18,7 +18,12 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { SessionStatusMarker } from "@/components/session-status-marker";
-import type { HostPresence, SidebarHostNode, SidebarSessionNode } from "@/lib/agent-tree";
+import type {
+  HostPresence,
+  SidebarHostNode,
+  SidebarProjectNode,
+  SidebarSessionNode,
+} from "@/lib/agent-tree";
 import { cn } from "@/lib/utils";
 
 export type Page = "workspace" | "hosts" | "agents" | "devices" | "audit" | "settings";
@@ -29,9 +34,11 @@ interface ShellProps {
   children: ReactNode;
   onAddHost: () => void;
   onLogout: () => void;
+  onNewSession: () => void;
   hosts: SidebarHostNode[];
   selectedAgentId: string | null;
   onSelectSession: (session: SidebarSessionNode) => void;
+  onSelectProjectForNewSession: (project: SidebarProjectNode) => void;
 }
 
 const secondaryNav: {
@@ -57,9 +64,11 @@ export function Shell({
   children,
   onAddHost,
   onLogout,
+  onNewSession,
   hosts,
   selectedAgentId,
   onSelectSession,
+  onSelectProjectForNewSession,
 }: ShellProps) {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
@@ -125,7 +134,7 @@ export function Shell({
           <nav className="dashboard-nav" aria-label="Primary">
             <button
               className={cn("dashboard-nav-item", page === "workspace" && "is-selected")}
-              onClick={() => onPageChange("workspace")}
+              onClick={onNewSession}
             >
               <SquarePen size={16} />
               <span>{t("nav.newSession")}</span>
@@ -192,7 +201,7 @@ export function Shell({
                         {host.projects.map((project) => {
                           const projectOpen = !closedProjects.has(project.id);
                           return (
-                            <div key={project.id}>
+                            <div key={project.id} className="dashboard-tree-project">
                               <button
                                 className="dashboard-tree-row project"
                                 aria-expanded={projectOpen}
@@ -206,6 +215,17 @@ export function Shell({
                                 />
                                 <Folder size={13} />
                                 <span className="tree-label">{project.label}</span>
+                              </button>
+                              <button
+                                className="dashboard-tree-action"
+                                aria-label={t("nav.newSessionInProject")}
+                                title={t("nav.newSessionInProject")}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectProjectForNewSession(project);
+                                }}
+                              >
+                                <Plus size={12} />
                               </button>
 
                               <div className={cn("collapsible", projectOpen && "is-open")}>

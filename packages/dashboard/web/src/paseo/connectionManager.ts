@@ -26,6 +26,8 @@ export type DaemonClientLike = Pick<
   | "createAgent"
   | "resumeAgent"
   | "respondToPermission"
+  | "applyAgentConfig"
+  | "getProvidersSnapshot"
   | "listTerminals"
   | "createTerminal"
   | "killTerminal"

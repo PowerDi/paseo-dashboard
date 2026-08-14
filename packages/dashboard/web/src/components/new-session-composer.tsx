@@ -26,6 +26,7 @@ interface NewSessionComposerProps {
   hosts: readonly Host[];
   runtimes: ReadonlyMap<string, DashboardHostRuntimeState>;
   onCreated: (hostId: string, agentId: string) => void;
+  preselectedProjectKey: string | null;
 }
 
 const PROVIDERS = AGENT_PROVIDER_DEFINITIONS.filter(
@@ -34,9 +35,14 @@ const PROVIDERS = AGENT_PROVIDER_DEFINITIONS.filter(
 
 const CHIP_CLASS = "composer-chip";
 
-export function NewSessionComposer({ hosts, runtimes, onCreated }: NewSessionComposerProps) {
+export function NewSessionComposer({
+  hosts,
+  runtimes,
+  onCreated,
+  preselectedProjectKey,
+}: NewSessionComposerProps) {
   const { t } = useTranslation();
-  const [projectKey, setProjectKey] = useState("");
+  const [projectKey, setProjectKey] = useState(preselectedProjectKey ?? "");
   const [provider, setProvider] = useState(PROVIDERS[0]?.id ?? "claude");
   const [prompt, setPrompt] = useState("");
   const promptRef = useAutosizeTextarea(prompt);

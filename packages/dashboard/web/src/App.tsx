@@ -7,6 +7,7 @@ import { ErrorAlertProvider } from "./components/error-alert";
 import { useHostRuntimes } from "./hooks/use-host-runtimes";
 import { Shell, type Page } from "./layouts/Shell";
 import { buildHostNodes, findAgentContext } from "./lib/agent-tree";
+import type { SidebarProjectNode } from "./lib/agent-tree";
 import { AgentsPage } from "./pages/AgentsPage";
 import { AuditPage } from "./pages/AuditPage";
 import { DevicesPage } from "./pages/DevicesPage";
@@ -80,6 +81,7 @@ function AuthenticatedApp() {
   const [importClosing, setImportClosing] = useState(false);
   const importCloseTimer = useRef<number | null>(null);
   const [selection, setSelection] = useState<AgentSelection | null>(null);
+  const [preselectedProjectKey, setPreselectedProjectKey] = useState<string | null>(null);
 
   const hostsMap = useHostSyncStore((state) => state.hosts);
   const hosts = useMemo(() => [...hostsMap.values()], [hostsMap]);
@@ -171,6 +173,18 @@ function AuthenticatedApp() {
     setPage("workspace");
   }
 
+  function handleNewSession() {
+    setSelection(null);
+    setPreselectedProjectKey(null);
+    setPage("workspace");
+  }
+
+  function handleSelectProjectForNewSession(project: SidebarProjectNode) {
+    setSelection(null);
+    setPreselectedProjectKey(project.id);
+    setPage("workspace");
+  }
+
   async function cancelAgent(hostId: string, agentId: string) {
     await dashboardRuntime.cancelAgent(hostId, agentId);
   }
@@ -194,9 +208,11 @@ function AuthenticatedApp() {
         onPageChange={setPage}
         onAddHost={openImport}
         onLogout={() => void useAppStore.getState().logout()}
+        onNewSession={handleNewSession}
         hosts={hostNodes}
         selectedAgentId={selection?.agentId ?? null}
         onSelectSession={(session) => selectAgent(session.hostId, session.id)}
+        onSelectProjectForNewSession={handleSelectProjectForNewSession}
       >
         <div key={page} className="dashboard-page-enter flex min-h-0 flex-1 flex-col">
           {page === "workspace" && (
@@ -207,6 +223,7 @@ function AuthenticatedApp() {
               onSelectAgent={selectAgent}
               onCancelAgent={cancelAgent}
               onArchiveAgent={archiveAgent}
+              preselectedProjectKey={preselectedProjectKey}
             />
           )}
           {page === "hosts" && (

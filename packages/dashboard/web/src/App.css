@@ -256,6 +256,38 @@
   font-size: 12px;
 }
 
+.dashboard-tree-action {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  color: var(--foreground-faint);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-standard);
+  cursor: pointer;
+}
+
+.dashboard-tree-action:hover {
+  background: var(--sidebar-hover);
+  color: var(--foreground);
+}
+
+.dashboard-tree-action svg {
+  color: inherit;
+}
+
+.dashboard-tree-project {
+  position: relative;
+}
+
+.dashboard-tree-project:hover .dashboard-tree-action {
+  opacity: 1;
+}
+
 .dashboard-nav-item:active,
 .dashboard-tree-row:active {
   transform: scale(0.985);

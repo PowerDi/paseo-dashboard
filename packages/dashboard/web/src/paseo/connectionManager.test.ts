@@ -93,6 +93,12 @@ class FakeClient implements DaemonClientLike {
   }
 
   async respondToPermission(): Promise<void> {}
+  async applyAgentConfig(): Promise<null> {
+    return null;
+  }
+  async getProvidersSnapshot(): Promise<{ entries: []; generatedAt: string; requestId: string }> {
+    return { entries: [], generatedAt: "", requestId: "" };
+  }
 
   listTerminals(): never {
     throw new Error("not implemented in fake");
