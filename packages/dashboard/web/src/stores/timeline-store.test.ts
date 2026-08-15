@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   createTimelineStore,
   timelineKey,
@@ -298,52 +298,137 @@ describe("timeline store", () => {
   });
 
   describe("stream events", () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-    });
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    test("throttles a tail refresh for open agents", async () => {
+    test("applies positioned timeline rows without fetching another tail page", async () => {
       const fetchAgentTimeline = vi
         .fn<TimelineDataClient["fetchAgentTimeline"]>()
-        .mockResolvedValue(page({ entries: [entry(0, 1)] }));
-      const store = createTimelineStore({
-        getClient: () => createClient(fetchAgentTimeline),
-        throttleMs: 400,
-      });
+        .mockResolvedValue(page({ entries: [entry(0, 0, "Hello ")] }));
+      const store = createTimelineStore({ getClient: () => createClient(fetchAgentTimeline) });
       await store.getState().open("host-a", "agent-1");
+
+      store.getState().applyStreamEvent("host-a", {
+        agentId: "agent-1",
+        event: {
+          type: "timeline",
+          provider: "codex",
+          item: { type: "assistant_message", text: "world" },
+        },
+        timestamp: "2026-08-13T00:00:01.000Z",
+        seq: 1,
+        epoch: "epoch-1",
+      });
+
       expect(fetchAgentTimeline).toHaveBeenCalledTimes(1);
-
-      for (let index = 0; index < 3; index += 1) {
-        store.getState().notifyStreamEvent("host-a", {
-          agentId: "agent-1",
-          event: { type: "turn_completed", provider: "codex" },
-          timestamp: "2026-08-13T00:00:00.000Z",
-        });
-      }
-      await vi.advanceTimersByTimeAsync(400);
-
-      expect(fetchAgentTimeline).toHaveBeenCalledTimes(2);
+      const state = store.getState().byKey.get(KEY);
+      expect(state?.entries).toHaveLength(1);
+      expect(state?.entries[0]?.item).toEqual({ type: "assistant_message", text: "Hello world" });
+      expect(state?.entries[0]?.seqStart).toBe(0);
+      expect(state?.entries[0]?.seqEnd).toBe(1);
+      expect(state?.maxSeq).toBe(1);
     });
 
-    test("ignores events for unopened agents and already-covered sequences", async () => {
+    test("updates a tool call in place when its lifecycle completes", async () => {
+      const fetchAgentTimeline = vi
+        .fn<TimelineDataClient["fetchAgentTimeline"]>()
+        .mockResolvedValue(page({ entries: [] }));
+      const store = createTimelineStore({ getClient: () => createClient(fetchAgentTimeline) });
+      await store.getState().open("host-a", "agent-1");
+
+      store.getState().applyStreamEvent("host-a", {
+        agentId: "agent-1",
+        event: {
+          type: "timeline",
+          provider: "codex",
+          item: {
+            type: "tool_call",
+            callId: "call-1",
+            name: "Bash",
+            detail: { type: "plain_text", text: "npm test" },
+            status: "running",
+            error: null,
+          },
+        },
+        timestamp: "2026-08-13T00:00:01.000Z",
+        seq: 0,
+        epoch: "epoch-1",
+      });
+      store.getState().applyStreamEvent("host-a", {
+        agentId: "agent-1",
+        event: {
+          type: "timeline",
+          provider: "codex",
+          item: {
+            type: "tool_call",
+            callId: "call-1",
+            name: "Bash",
+            detail: { type: "plain_text", text: "npm test" },
+            status: "completed",
+            error: null,
+          },
+        },
+        timestamp: "2026-08-13T00:00:02.000Z",
+        seq: 1,
+        epoch: "epoch-1",
+      });
+
+      const state = store.getState().byKey.get(KEY);
+      expect(fetchAgentTimeline).toHaveBeenCalledTimes(1);
+      expect(state?.entries).toHaveLength(1);
+      expect(state?.entries[0]?.seqEnd).toBe(1);
+      expect(state?.entries[0]?.item).toMatchObject({
+        type: "tool_call",
+        callId: "call-1",
+        status: "completed",
+      });
+      expect(state?.maxSeq).toBe(1);
+    });
+
+    test("refreshes the authoritative tail when a stream sequence gap is detected", async () => {
+      const fetchAgentTimeline = vi
+        .fn<TimelineDataClient["fetchAgentTimeline"]>()
+        .mockResolvedValueOnce(page({ entries: [entry(0, 0, "first")] }))
+        .mockResolvedValueOnce(page({ entries: [entry(0, 2, "first and third")] }));
+      const store = createTimelineStore({ getClient: () => createClient(fetchAgentTimeline) });
+      await store.getState().open("host-a", "agent-1");
+
+      store.getState().applyStreamEvent("host-a", {
+        agentId: "agent-1",
+        event: {
+          type: "timeline",
+          provider: "codex",
+          item: { type: "assistant_message", text: "third" },
+        },
+        timestamp: "2026-08-13T00:00:02.000Z",
+        seq: 2,
+        epoch: "epoch-1",
+      });
+      await Promise.resolve();
+
+      expect(fetchAgentTimeline).toHaveBeenCalledTimes(2);
+      expect(store.getState().byKey.get(KEY)?.entries[0]?.item).toEqual({
+        type: "assistant_message",
+        text: "first and third",
+      });
+    });
+
+    test("ignores stale, unpositioned, unopened, and epoch-mismatched stream events", async () => {
       const fetchAgentTimeline = vi
         .fn<TimelineDataClient["fetchAgentTimeline"]>()
         .mockResolvedValue(page({ entries: [entry(0, 5)] }));
-      const store = createTimelineStore({
-        getClient: () => createClient(fetchAgentTimeline),
-        throttleMs: 400,
-      });
+      const store = createTimelineStore({ getClient: () => createClient(fetchAgentTimeline) });
       await store.getState().open("host-a", "agent-1");
 
-      store.getState().notifyStreamEvent("host-a", {
+      store.getState().applyStreamEvent("host-a", {
         agentId: "agent-other",
-        event: { type: "turn_completed", provider: "codex" },
+        event: {
+          type: "timeline",
+          provider: "codex",
+          item: { type: "assistant_message", text: "other" },
+        },
         timestamp: "2026-08-13T00:00:00.000Z",
+        seq: 6,
+        epoch: "epoch-1",
       });
-      store.getState().notifyStreamEvent("host-a", {
+      store.getState().applyStreamEvent("host-a", {
         agentId: "agent-1",
         event: {
           type: "timeline",
@@ -351,12 +436,28 @@ describe("timeline store", () => {
           item: { type: "assistant_message", text: "old" },
         },
         timestamp: "2026-08-13T00:00:00.000Z",
-        seq: 3,
+        seq: 5,
         epoch: "epoch-1",
       });
-      await vi.advanceTimersByTimeAsync(1000);
+      store.getState().applyStreamEvent("host-a", {
+        agentId: "agent-1",
+        event: { type: "turn_completed", provider: "codex" },
+        timestamp: "2026-08-13T00:00:00.000Z",
+      });
+      store.getState().applyStreamEvent("host-a", {
+        agentId: "agent-1",
+        event: {
+          type: "timeline",
+          provider: "codex",
+          item: { type: "assistant_message", text: "wrong epoch" },
+        },
+        timestamp: "2026-08-13T00:00:00.000Z",
+        seq: 6,
+        epoch: "epoch-2",
+      });
 
       expect(fetchAgentTimeline).toHaveBeenCalledTimes(1);
+      expect(store.getState().byKey.get(KEY)?.entries).toEqual([entry(0, 5)]);
     });
   });
 });

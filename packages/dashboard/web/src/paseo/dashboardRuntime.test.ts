@@ -572,31 +572,33 @@ describe("dashboard Paseo runtime", () => {
     expect(runtime.getTimeline("host-a", "agent-host-a")).toBeNull();
   });
 
-  test("agent_stream events refresh the viewed timeline", async () => {
-    vi.useFakeTimers();
-    try {
-      const { clients, runtime } = createRuntimeWithClients();
-      await runtime.connectHost(makeHost("host-a"));
-      await runtime.viewAgent("host-a", "agent-host-a");
-      const client = clients.get("host-a")!;
-      expect(client.fetchAgentTimeline).toHaveBeenCalledTimes(1);
+  test("agent_stream timeline rows update the viewed timeline without a tail refetch", async () => {
+    const { clients, runtime } = createRuntimeWithClients();
+    await runtime.connectHost(makeHost("host-a"));
+    await runtime.viewAgent("host-a", "agent-host-a");
+    const client = clients.get("host-a")!;
+    expect(client.fetchAgentTimeline).toHaveBeenCalledTimes(1);
 
-      client.emitMessage({
-        type: "agent_stream",
-        payload: {
-          agentId: "agent-host-a",
-          event: { type: "turn_completed", provider: "codex" },
-          timestamp: "2026-08-13T00:00:01.000Z",
-          seq: 5,
-          epoch: "epoch-1",
+    client.emitMessage({
+      type: "agent_stream",
+      payload: {
+        agentId: "agent-host-a",
+        event: {
+          type: "timeline",
+          provider: "codex",
+          item: { type: "assistant_message", text: "next" },
         },
-      });
-      await vi.advanceTimersByTimeAsync(500);
+        timestamp: "2026-08-13T00:00:01.000Z",
+        seq: 2,
+        epoch: "epoch-1",
+      },
+    });
 
-      expect(client.fetchAgentTimeline).toHaveBeenCalledTimes(2);
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(client.fetchAgentTimeline).toHaveBeenCalledTimes(1);
+    expect(runtime.getTimeline("host-a", "agent-host-a")?.entries.at(-1)?.item).toEqual({
+      type: "assistant_message",
+      text: "hellonext",
+    });
   });
 
   test("stops listening to daemon pushes after disconnect", async () => {

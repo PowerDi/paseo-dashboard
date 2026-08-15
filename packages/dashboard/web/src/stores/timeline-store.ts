@@ -6,7 +6,6 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 
 const TAIL_LIMIT = 50;
 const OLDER_LIMIT = 50;
-const STREAM_REFRESH_THROTTLE_MS = 400;
 /**
  * Upper bound on in-memory entries per agent. Long streaming sessions append
  * on every tail refresh while keeping loaded history; without a cap the array
@@ -56,8 +55,8 @@ export interface TimelineStoreState {
   /** Creates the slot and fetches the latest tail page. Idempotent refresh when already open. */
   open(hostId: string, agentId: string): Promise<void>;
   loadOlder(hostId: string, agentId: string): Promise<void>;
-  /** Throttled tail refresh for stream events of open agents. */
-  notifyStreamEvent(hostId: string, payload: AgentStreamPayload): void;
+  /** Applies a positioned live timeline row for immediate display. */
+  applyStreamEvent(hostId: string, payload: AgentStreamPayload): void;
   /** Adds an optimistic user message until its canonical clientMessageId arrives. */
   submit(hostId: string, agentId: string, submission: TimelineSubmission): void;
   /** Removes an optimistic message whose request was rejected. */
@@ -70,7 +69,6 @@ export interface TimelineStoreState {
 export interface TimelineStoreDependencies {
   getClient(hostId: string): TimelineDataClient | null;
   now?: () => number;
-  throttleMs?: number;
   maxEntries?: number;
 }
 
@@ -92,6 +90,104 @@ function reconcileSubmissions(
   return submissions.filter((submission) => !confirmedIds.has(submission.messageId));
 }
 
+function mergeToolItems(current: TimelineEntry, incoming: TimelineEntry): TimelineEntry {
+  if (current.item.type !== "tool_call" || incoming.item.type !== "tool_call") return incoming;
+  return {
+    ...current,
+    item: incoming.item,
+    timestamp: incoming.timestamp,
+    seqEnd: incoming.seqEnd,
+    sourceSeqRanges: incoming.sourceSeqRanges,
+    collapsed: incoming.collapsed,
+  };
+}
+
+function mergeCollapsed(
+  left: TimelineEntry["collapsed"],
+  right: TimelineEntry["collapsed"],
+  added: TimelineEntry["collapsed"][number],
+): TimelineEntry["collapsed"] {
+  return [...new Set<TimelineEntry["collapsed"][number]>([...left, ...right, added])];
+}
+
+function appendStreamEntry(
+  current: AgentTimelineState,
+  incoming: TimelineEntry,
+  maxEntries: number,
+): AgentTimelineState {
+  const last = current.entries.at(-1);
+  let entries: TimelineEntry[];
+  if (
+    last?.item.type === "assistant_message" &&
+    incoming.item.type === "assistant_message" &&
+    last.seqEnd + 1 === incoming.seqStart &&
+    (incoming.item.messageId === undefined || last.item.messageId === incoming.item.messageId)
+  ) {
+    entries = [
+      ...current.entries.slice(0, -1),
+      {
+        ...incoming,
+        item: {
+          type: "assistant_message",
+          text: `${last.item.text}${incoming.item.text}`,
+          ...(last.item.messageId ? { messageId: last.item.messageId } : {}),
+        },
+        seqStart: last.seqStart,
+        sourceSeqRanges: [...last.sourceSeqRanges, ...incoming.sourceSeqRanges],
+        collapsed: mergeCollapsed(last.collapsed, incoming.collapsed, "assistant_merge"),
+      },
+    ];
+  } else if (
+    last?.item.type === "reasoning" &&
+    incoming.item.type === "reasoning" &&
+    last.seqEnd + 1 === incoming.seqStart
+  ) {
+    entries = [
+      ...current.entries.slice(0, -1),
+      {
+        ...incoming,
+        item: { type: "reasoning", text: `${last.item.text}${incoming.item.text}` },
+        seqStart: last.seqStart,
+        sourceSeqRanges: [...last.sourceSeqRanges, ...incoming.sourceSeqRanges],
+        collapsed: mergeCollapsed(last.collapsed, incoming.collapsed, "reasoning_merge"),
+      },
+    ];
+  } else if (incoming.item.type === "tool_call") {
+    // A tool call keeps its original display position while later lifecycle
+    // rows advance its seqEnd, so match by callId instead of adjacency.
+    const callId = incoming.item.callId;
+    let index = -1;
+    for (let candidate = current.entries.length - 1; candidate >= 0; candidate -= 1) {
+      const entry = current.entries[candidate];
+      if (entry?.item.type === "tool_call" && entry.item.callId === callId) {
+        index = candidate;
+        break;
+      }
+    }
+    const existing = current.entries[index];
+    if (existing) {
+      entries = [...current.entries];
+      entries[index] = mergeToolItems(existing, incoming);
+    } else {
+      entries = [...current.entries, incoming];
+    }
+  } else {
+    entries = [...current.entries, incoming];
+  }
+
+  if (entries.length <= maxEntries) return { ...current, entries };
+  const retained = entries.slice(entries.length - maxEntries);
+  const first = retained[0];
+  return {
+    ...current,
+    entries: retained,
+    hasOlder: true,
+    startCursor: current.epoch
+      ? { epoch: current.epoch, seq: first.seqStart }
+      : current.startCursor,
+  };
+}
+
 const EMPTY_STATE: AgentTimelineState = {
   loading: false,
   loadingOlder: false,
@@ -105,25 +201,12 @@ const EMPTY_STATE: AgentTimelineState = {
   lastUpdated: null,
 };
 
-/** Stream event types that can change the timeline and warrant a tail refresh. */
-const REFRESH_EVENT_TYPES = new Set([
-  "timeline",
-  "turn_started",
-  "turn_completed",
-  "turn_failed",
-  "turn_canceled",
-  "permission_requested",
-  "permission_resolved",
-]);
-
 export function createTimelineStore(
   dependencies: TimelineStoreDependencies,
 ): StoreApi<TimelineStoreState> {
   const now = dependencies.now ?? (() => Date.now());
-  const throttleMs = dependencies.throttleMs ?? STREAM_REFRESH_THROTTLE_MS;
   const maxEntries = dependencies.maxEntries ?? MAX_ENTRIES;
 
-  /** Drops the oldest entries above the cap; they stay loadable via "load older". */
   function capEntries(state: AgentTimelineState): AgentTimelineState {
     if (state.entries.length <= maxEntries) return state;
     const entries = state.entries.slice(state.entries.length - maxEntries);
@@ -136,20 +219,13 @@ export function createTimelineStore(
         state.epoch !== null ? { epoch: state.epoch, seq: first.seqStart } : state.startCursor,
     };
   }
-  const refreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
   const requestGenerations = new Map<string, number>();
 
   function bumpGeneration(key: string): number {
     const next = (requestGenerations.get(key) ?? 0) + 1;
     requestGenerations.set(key, next);
     return next;
-  }
-
-  function cancelRefreshTimer(key: string): void {
-    const timer = refreshTimers.get(key);
-    if (timer === undefined) return;
-    clearTimeout(timer);
-    refreshTimers.delete(key);
   }
 
   return createStore<TimelineStoreState>()((set, get) => {
@@ -323,33 +399,40 @@ export function createTimelineStore(
         }));
       },
 
-      notifyStreamEvent(hostId, payload) {
+      applyStreamEvent(hostId, payload) {
         const key = timelineKey(hostId, payload.agentId);
         const current = get().byKey.get(key);
-        if (!current) return;
-        if (!REFRESH_EVENT_TYPES.has(payload.event.type)) return;
-        if (
-          typeof payload.seq === "number" &&
-          payload.epoch !== undefined &&
-          payload.epoch === current.epoch &&
-          payload.seq <= current.maxSeq
-        ) {
+        if (!current || payload.event.type !== "timeline") return;
+        const seq = payload.seq;
+        const epoch = payload.epoch;
+        if (seq === undefined || epoch === undefined) return;
+        if (current.epoch !== epoch || seq <= current.maxSeq) return;
+        if (seq > current.maxSeq + 1) {
+          void loadTail(hostId, payload.agentId);
           return;
         }
-        if (refreshTimers.has(key)) return;
-        refreshTimers.set(
-          key,
-          setTimeout(() => {
-            refreshTimers.delete(key);
-            if (!get().byKey.has(key)) return;
-            void loadTail(hostId, payload.agentId);
-          }, throttleMs),
-        );
+        const event = payload.event;
+        updateKey(key, (state) => {
+          const incoming: TimelineEntry = {
+            provider: event.provider,
+            item: event.item,
+            timestamp: payload.timestamp,
+            seqStart: seq,
+            seqEnd: seq,
+            sourceSeqRanges: [{ startSeq: seq, endSeq: seq }],
+            collapsed: [],
+          };
+          return {
+            ...appendStreamEntry(state, incoming, maxEntries),
+            submissions: reconcileSubmissions(state.submissions, [incoming]),
+            maxSeq: seq,
+            lastUpdated: now(),
+          };
+        });
       },
 
       close(hostId, agentId) {
         const key = timelineKey(hostId, agentId);
-        cancelRefreshTimer(key);
         bumpGeneration(key);
         set((state) => {
           if (!state.byKey.has(key)) return state;
@@ -365,7 +448,6 @@ export function createTimelineStore(
           const byKey = new Map(state.byKey);
           for (const key of byKey.keys()) {
             if (!key.startsWith(prefix)) continue;
-            cancelRefreshTimer(key);
             bumpGeneration(key);
             byKey.delete(key);
           }
@@ -375,7 +457,6 @@ export function createTimelineStore(
 
       clear() {
         for (const key of get().byKey.keys()) {
-          cancelRefreshTimer(key);
           bumpGeneration(key);
         }
         set({ byKey: new Map() });

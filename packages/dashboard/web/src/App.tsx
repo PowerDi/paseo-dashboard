@@ -1,11 +1,13 @@
 import type { Host } from "@getpaseo/dashboard-shared";
 import { LoaderCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { dashboardApi, deleteHost, updateHost } from "./api/dashboardApi";
 import { ErrorAlertProvider } from "./components/error-alert";
 import { useHostRuntimes } from "./hooks/use-host-runtimes";
-import { Shell, type Page } from "./layouts/Shell";
+import { type Page, Shell } from "./layouts/Shell";
+import { agentPath, pagePaths, parseDashboardRoute } from "./navigation/routes";
 import { buildHostNodes, findAgentContext } from "./lib/agent-tree";
 import type { SidebarProjectNode } from "./lib/agent-tree";
 import { AgentsPage } from "./pages/AgentsPage";
@@ -22,11 +24,6 @@ import { useHostSyncStore } from "./stores/host-sync-store";
 import { Button } from "./components/ui/button";
 
 const MODAL_CLOSE_MS = 180;
-
-interface AgentSelection {
-  hostId: string;
-  agentId: string;
-}
 
 function CenteredScreen({ children }: { children: React.ReactNode }) {
   return (
@@ -76,12 +73,25 @@ export function App() {
 }
 
 function AuthenticatedApp() {
-  const [page, setPage] = useState<Page>("workspace");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const route = parseDashboardRoute(location.pathname);
+  const page = route?.page ?? "workspace";
+  const selection = route?.selection ?? null;
   const [showImport, setShowImport] = useState(false);
   const [importClosing, setImportClosing] = useState(false);
   const importCloseTimer = useRef<number | null>(null);
-  const [selection, setSelection] = useState<AgentSelection | null>(null);
   const [preselectedProjectKey, setPreselectedProjectKey] = useState<string | null>(null);
+
+  function setPage(nextPage: Page) {
+    navigate(pagePaths[nextPage]);
+  }
+
+  // `/` and any unknown path canonicalize to the workspace URL so a refresh
+  // lands back on the same page instead of a path that renders workspace.
+  useEffect(() => {
+    if (!route) navigate(pagePaths.workspace, { replace: true });
+  }, [route, navigate]);
 
   const hostsMap = useHostSyncStore((state) => state.hosts);
   const hosts = useMemo(() => [...hostsMap.values()], [hostsMap]);
@@ -160,7 +170,7 @@ function AuthenticatedApp() {
   async function handleRemoveHost(host: Host) {
     await deleteHost(host.id).catch(() => undefined);
     await useHostSyncStore.getState().sync();
-    if (selection?.hostId === host.id) setSelection(null);
+    if (selection?.hostId === host.id) navigate(pagePaths.workspace);
   }
 
   async function handleRenameHost(host: Host, label: string) {
@@ -169,20 +179,17 @@ function AuthenticatedApp() {
   }
 
   function selectAgent(hostId: string, agentId: string) {
-    setSelection({ hostId, agentId });
-    setPage("workspace");
+    navigate(agentPath(hostId, agentId));
   }
 
   function handleNewSession() {
-    setSelection(null);
     setPreselectedProjectKey(null);
-    setPage("workspace");
+    navigate(pagePaths.workspace);
   }
 
   function handleSelectProjectForNewSession(project: SidebarProjectNode) {
-    setSelection(null);
     setPreselectedProjectKey(project.id);
-    setPage("workspace");
+    navigate(pagePaths.workspace);
   }
 
   async function cancelAgent(hostId: string, agentId: string) {
@@ -192,7 +199,7 @@ function AuthenticatedApp() {
   async function archiveAgent(hostId: string, agentId: string) {
     await dashboardRuntime.archiveAgent(hostId, agentId);
     if (selection?.hostId === hostId && selection.agentId === agentId) {
-      setSelection(null);
+      navigate(pagePaths.workspace);
     }
   }
 

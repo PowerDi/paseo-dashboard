@@ -8,7 +8,7 @@ import "./stores/theme-store";
 
 const router = createBrowserRouter([
   {
-    path: "/",
+    path: "*",
     element: <App />,
   },
 ]);

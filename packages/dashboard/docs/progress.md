@@ -83,6 +83,8 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 - [x] **P3.5 兼容性测试**：`tests/e2e/src/compatibility.vitest.test.ts` 新增 15 个兼容性测试（feature detection 7 个、兼容性判断 4 个、feature gating 行为 4 个），覆盖 v0.1.80/v0.1.81/v0.1.106 daemon 版本矩阵；`docs/compatibility-matrix.md` 记录版本矩阵、特性门控列表（selectiveAgentTimeline/terminalRestoreModes）、添加新 gate 流程、COMPAT 标签清理规则；`AGENTS.md` 文档地图新增兼容性条目。E2E 测试 8→23。随 commit `4638617ce` 提交。
 - [x] **P3.6 历史 Web 缺口补齐**（commit `4638617ce`）：`GET /me` 接线（`bootstrap()` 改 `Promise.all([getMe, listHosts])`，刷新后不再靠 localStorage 显示邮箱）；SSE 断流指数退避重连（1s→30s，回传 `Last-Event-ID` 让 server 跳过已发事件）；Host 内联改名（乐观并发 `baseVersion`）；修改密码表单；审计记录页 + 侧栏入口；「加载更早」从按钮改 `IntersectionObserver` 滚动哨兵（200px 预触发）。
 - [x] **新建会话体验**（commit `d434c283d`）：新建会话入口、项目栏新建图标、已有会话切换 model。
+- [x] **路由与 agent 深链**：导航状态搬进 react-router。`main.tsx` 注册 `path: "*"`，URL 是唯一的导航来源——`navigation/routes.ts` 的 `parseDashboardRoute` 把 pathname 解析成 `{ page, selection }`，`App.tsx` 不再持有 `useState<Page>` / `useState<AgentSelection>`。页面各有 URL（`/workspace`、`/hosts`、`/agents`、`/devices`、`/audit`、`/settings`），agent 深链是 `/agent/:hostId/:agentId`，刷新回到同一会话。`/` 和未知路径 `replace` 到 `/workspace`，不留下一个渲染 workspace 的野路径。id 走 `encodeURIComponent`，坏的百分号转义按未知路径处理而不是抛异常（5 单测）。生产部署要求静态服务器有 SPA fallback（`deployment.md` 的 nginx 示例已有 `try_files ... /index.html`）。
+- [x] **Timeline 增量 reducer**：`timeline-store` 直接消费带 `epoch`/`seq` 的 positioned `agent_stream` timeline 行，连续的 assistant/reasoning chunk 在本地合并，tool lifecycle 按 `callId` 原地更新；遇到重复或未定位事件丢弃，遇到 sequence gap 只做一次权威 tail catch-up，不再用 400ms 节流重拉每个事件。内存上限与 optimistic submission 对账保留。`timeline-store` 与 `dashboardRuntime` 测试覆盖（32/32）。
 
 ### 迁移变更记录
 
@@ -101,13 +103,11 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 M3 退出前剩余：
 
 1. **提交并推送工作区改动**：上面「工作区未提交改动」四项，提交前跑 `test:dashboard` + `typecheck:dashboard`。亮色主题还需要 Playwright 双主题截图（尤其代码块、diff、terminal）。
-2. **路由**：`roadmap.md` M3 范围内。`main.tsx` 只注册 `/`，页面切换是 `App.tsx` 的 `useState<Page>`，agent 选择是 `useState<AgentSelection>`——没有 per-page URL、没有 agent 深链、刷新回 workspace 空态。react-router-dom 已装但没用起来，做深链要先把导航状态搬进 router。
-3. **权限卡片实测**：codex 在当前模式自动放行，真实审批弹出流程没复现过；响应链路只有单测覆盖。需要换一个带审批模式的 provider 实测一次。
+2. **权限卡片实测**：codex 在当前模式自动放行，真实审批弹出流程没复现过；响应链路只有单测覆盖。需要换一个带审批模式的 provider 实测一次。
 
 M3 之后（不阻塞退出）：
 
-4. **Timeline 增量 reducer**：流式期间仍是 400ms 节流 tail 重拉（limit 50）。Paseo App 的做法在 `packages/app/src/timeline/session-stream-reducers.ts`。
-5. 完整序列见 `docs/development-plan.md`。
+3. 完整序列见 `docs/development-plan.md`。
 
 Dashboard 测试不进 CI，本地用 `test:dashboard` 跑。
 
@@ -216,13 +216,13 @@ npm run typecheck:dashboard
 ### Web 数据接线（P3.2）
 
 - 认证：Web 用 HttpOnly cookie；`stores/app-store.ts` 的 `bootstrap()` 用 `listHosts()` 探测（200→ready，401→未登录，其他→可重试错误）；`dashboardApi.setUnauthorizedHandler` 全局接 401 登出。用户对象取自登录/注册响应并缓存在 localStorage 供设置页显示——服务端有 `GET /api/v1/me` 可以直接取，web 端还没接（见待开始 P3.6）。
-- 路由：`main.tsx` 只注册了 `/` 一条路由，页面切换是 `App.tsx` 里的 `useState<Page>`，agent 选择是 `useState<AgentSelection>`。react-router-dom 装了但没用起来，所以没有 per-page URL、没有 agent 深链、刷新回到 workspace 空态。要做深链就得先把导航状态搬进 router。
+- 路由：`main.tsx` 的 catch-all 路由交给 `App.tsx`，`navigation/routes.ts` 是 URL 的唯一解析点。页面路径是 `/workspace`、`/hosts`、`/agents`、`/devices`、`/audit`、`/settings`；`/agent/:hostId/:agentId` 打开指定 agent。未知路径 replace 到 `/workspace`。
 - 数据流：`host-sync-store`（Dashboard host 注册表）→ `App.tsx` effect 对每个 host `dashboardRuntime.connectHost`（断线 host 自动 disconnect）→ `hooks/use-host-runtimes.ts` 订阅每个 host 的连接态 + daemon 数据 → `lib/agent-tree.ts` 纯函数构建侧栏树/列表行。SSE `host.upserted/deleted` 只触发一次增量 `sync()`（事件 data 是松散类型，不直接消费）。
 - **分组键的坑**：agent placement 的 `projectKey` 字段实际是 `projectId`（daemon 在 `packages/server/src/server/session.ts` 里填的），与项目描述符自己的 `projectKey`（新式 key）不同源。按 `projectId` 分组，否则同一项目出现两行。
 - Host 导入的真实验证：`dashboardRuntime.verifyConnection(host)` 临时连 relay 读 `server_info.version` 后即断开，临时 host 不进 sync store。
 - SSE 长连接会让 Playwright 的 `waitUntil: "networkidle"` 永远超时，登录后一律用 `domcontentloaded`。
 - 实时数据：`dashboardRuntime` 连接后通过 `client.on("agent_update"/"workspace_update"/"project.update")` 把推送写进 `daemon-data-store` 的 apply reducer；重连时 `refreshHost` 兜底。测试里 mock `DaemonClient["on"]` 重载集很难精确实现（`DaemonEventHandler` 变体的事件 union 与 `SessionOutboundMessage` 不同），fake 用属性 + `as DaemonClientLike["on"]` 断言。
-- Timeline：daemon 的 live `agent_stream` 可能是 delta 形态，dashboard 不做增量 reducer——`timeline-store` 收到流事件后节流重拉 tail 页，用页首 `seqStart` 切割合并（同 epoch 且重叠/相邻时保留更早历史，daemon 投影替换重叠后缀）。语义依据见 Paseo `docs/timeline-sync.md`。`sourceSeqRanges` 字段是 `startSeq/endSeq`。
+- Timeline：live `agent_stream` 里带 `epoch`+`seq` 的 timeline 行由 `timeline-store.applyStreamEvent` 增量应用（assistant/reasoning 相邻 chunk 拼接，tool lifecycle 按 `callId` 原地更新）。**seq 只能连续推进**：`seq <= maxSeq` 丢弃，`seq > maxSeq + 1` 说明漏了行，只能回到权威 tail 重拉，不要凭 delta 猜中间内容。没有 `seq`/`epoch` 的事件（turn*\*、permission*\*）不动 timeline。tail 页合并仍用页首 `seqStart` 切割（同 epoch 且重叠/相邻时保留更早历史，daemon 投影替换重叠后缀）。语义依据见 Paseo `docs/timeline-sync.md`。`sourceSeqRanges` 字段是 `startSeq/endSeq`。
 - **权限不是 timeline 条目**：`AgentTimelineItem` 的 union 只有 7 种（user_message / assistant_message / reasoning / tool_call / todo / error / compaction），`components/timeline.tsx` 全部渲染了，覆盖完整。权限走两条独立通道：agent 快照的 `pendingPermissions` 数组，和 `agent_stream` 的 `permission_requested`/`permission_resolved` 事件（在 `timeline-store` 的 `REFRESH_EVENT_TYPES` 里只用来触发 tail 重拉）。做 P3.4 时不要去扩 timeline item 类型。
 - `DaemonClientLike` 是 `Pick<DaemonClient, ...>`（`paseo/connectionManager.ts:13`）。加新 daemon 能力先往这个 Pick 里加名字，不要在页面里绕过 connection manager 直接摸 `DaemonClient`。
 - **Terminal**：`paseo/terminalSession.ts` 是唯一的终端流处理层——订阅 `onTerminalStreamEvent`（按 terminalId 过滤 output/restore/snapshot）、`terminal_stream_exit`、resize intent（attach 时 claim、之后 update，语义见 Paseo `docs/terminal-performance.md`）。restore 模式经 `features["terminal-restore-modes"]` gate（COMPAT 注释在代码里）；无 feature 的旧 daemon 会送 snapshot 帧，`terminal-view.tsx` 用 `renderTerminalSnapshotToAnsi`（`@getpaseo/protocol/terminal-snapshot`）reset+重放进 xterm。xterm 的 `fontFamily` 不解析 CSS 变量，要写完整字体栈。终端是 per-cwd 的（`listTerminals(cwd, …, { workspaceId })`），Workspace 页用 `agent.cwd`/`agent.workspaceId`。
@@ -284,3 +284,4 @@ npm run typecheck:dashboard
 | 2026-08-14 | Fable            | 把 Dashboard Web UI 风格写成 `docs/ui.md`；AGENTS.md / 文档地图 / paseo-integration 页面平移原则改为指向该篇。                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | 2026-08-14 | Fable            | P3.1 完成：集中 feature gating 模块 `paseo/features.ts`（`getDaemonFeatures`/`isCompatibleDaemon` + 10 单测）；`selectiveAgentTimeline` 在 `viewAgent`/`leaveAgent` 中 gate（COMPAT 标签）；`terminalRestoreModes` 改用统一模块；dashboardRuntime 测试补 `getLastServerInfoMessage` 返回完整 server_info。web 单测 94→104，test:dashboard 全绿（web 104 + contract 79 + e2e 8 = 191）；typecheck/lint/format 通过。P3.1 退出条件满足。                                                                                                   |
 | 2026-08-15 | Fable            | Agent 列表实时订阅（`fetch_agents.subscribe` 只在首页建立）；发送消息乐观气泡 + 稳定 `clientMessageId` 对账（不按文本匹配、不靠 `running` 状态清理）；活动指示器去文案留计时并修复 daemon 时钟超前导致恒为 0s；亮色主题 + 主题切换（`theme-store` 持久化、代码块/滚动条/选区/xterm 配色 token 化）。web 单测 104→112；typecheck/lint/format 通过。progress.md 与 ui.md 同步。按用户决定，dashboard 测试不进 CI，从待办中移除。                                                                                                           |
+| 2026-08-15 | Claude           | P3 路由与 Timeline 增量同步：页面 URL 与 `/agent/:hostId/:agentId` 深链成为唯一选择来源；带 `epoch` + `seq` 的 live timeline 行在前端按 daemon projection 规则增量合并，seq gap 才权威重拉 tail。Dashboard 完整测试通过：web 119、contract 79、e2e 23，共 221 项。                                                                                                                                                                                                                                                                       |

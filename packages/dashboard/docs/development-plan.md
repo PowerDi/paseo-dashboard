@@ -285,7 +285,7 @@
 1. ~~Project / Workspace 列表与切换。~~ 完成。
 2. Agent 列表、创建、停止、恢复、归档。**全部完成**（创建与恢复在 P3.4 落地：新建会话 composer + Agents 页归档区恢复入口）。
 3. ~~Agent 实时输出订阅与页面状态管理。~~ 完成（`agent_update`/`workspace_update`/`project.update` 订阅 + 重连补拉）。
-4. 路由（`roadmap.md` M3 范围里的「路由」）：**未做**。`main.tsx` 只注册 `/` 一条路由，页面和 agent 选择都是 `App.tsx` 的 `useState`，react-router-dom 装了没用。结果是没有 per-page URL、没有 agent 深链、刷新回到空态。做深链要先把导航状态搬进 router。
+4. ~~路由（`roadmap.md` M3 范围里的「路由」）：~~ 完成。`navigation/routes.ts` 集中解析 URL，`App.tsx` 以 pathname 作为页面与 agent 选择的唯一来源。页面路径是 `/workspace`、`/hosts`、`/agents`、`/devices`、`/audit`、`/settings`；agent 深链是 `/agent/:hostId/:agentId`。
 
 **产出**
 

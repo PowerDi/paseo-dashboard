@@ -177,7 +177,7 @@ export function createDashboardRuntime(
           store.applyProjectUpdate(hostId, message.payload);
         }),
         client.on("agent_stream", (message) => {
-          timelineStore.getState().notifyStreamEvent(hostId, message.payload);
+          timelineStore.getState().applyStreamEvent(hostId, message.payload);
         }),
       ],
       lastStatus: connectionManager.getState(hostId).status,
