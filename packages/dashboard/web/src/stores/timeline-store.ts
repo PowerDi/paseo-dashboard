@@ -31,12 +31,19 @@ export interface TimelineDataClient {
   ): Promise<TimelinePage>;
 }
 
+export interface TimelineSubmission {
+  messageId: string;
+  text: string;
+  startedAt: number;
+}
+
 export interface AgentTimelineState {
   loading: boolean;
   loadingOlder: boolean;
   error: string | null;
   epoch: string | null;
   entries: TimelineEntry[];
+  submissions: TimelineSubmission[];
   startCursor: TimelineCursor | null;
   hasOlder: boolean;
   /** Sequence end of the covered canonical range; -1 before the first page. */
@@ -49,8 +56,12 @@ export interface TimelineStoreState {
   /** Creates the slot and fetches the latest tail page. Idempotent refresh when already open. */
   open(hostId: string, agentId: string): Promise<void>;
   loadOlder(hostId: string, agentId: string): Promise<void>;
-  /** Throttled tail refresh for stream events of an open agent. */
+  /** Throttled tail refresh for stream events of open agents. */
   notifyStreamEvent(hostId: string, payload: AgentStreamPayload): void;
+  /** Adds an optimistic user message until its canonical clientMessageId arrives. */
+  submit(hostId: string, agentId: string, submission: TimelineSubmission): void;
+  /** Removes an optimistic message whose request was rejected. */
+  rejectSubmission(hostId: string, agentId: string, messageId: string): void;
   close(hostId: string, agentId: string): void;
   clearHost(hostId: string): void;
   clear(): void;
@@ -67,12 +78,27 @@ export function timelineKey(hostId: string, agentId: string): string {
   return `${hostId}\u0000${agentId}`;
 }
 
+function reconcileSubmissions(
+  submissions: readonly TimelineSubmission[],
+  entries: readonly TimelineEntry[],
+): TimelineSubmission[] {
+  const confirmedIds = new Set(
+    entries.flatMap((entry) =>
+      entry.item.type === "user_message" && entry.item.clientMessageId
+        ? [entry.item.clientMessageId]
+        : [],
+    ),
+  );
+  return submissions.filter((submission) => !confirmedIds.has(submission.messageId));
+}
+
 const EMPTY_STATE: AgentTimelineState = {
   loading: false,
   loadingOlder: false,
   error: null,
   epoch: null,
   entries: [],
+  submissions: [],
   startCursor: null,
   hasOlder: false,
   maxSeq: -1,
@@ -157,6 +183,7 @@ export function createTimelineStore(
         ...base,
         epoch: page.epoch,
         entries: page.entries,
+        submissions: reconcileSubmissions(current.submissions, page.entries),
         startCursor: page.startCursor,
         hasOlder: page.hasOlder,
         maxSeq: page.window.maxSeq,
@@ -176,6 +203,7 @@ export function createTimelineStore(
       return capEntries({
         ...base,
         entries: [...kept, ...incoming],
+        submissions: reconcileSubmissions(current.submissions, incoming),
         maxSeq: page.window.maxSeq,
         startCursor: kept.length > 0 ? current.startCursor : page.startCursor,
         hasOlder: kept.length > 0 ? current.hasOlder : page.hasOlder,
@@ -256,6 +284,7 @@ export function createTimelineStore(
             ...state,
             loadingOlder: false,
             entries: [...page.entries, ...state.entries],
+            submissions: reconcileSubmissions(state.submissions, page.entries),
             startCursor: page.startCursor,
             hasOlder: page.hasOlder,
             lastUpdated: now(),
@@ -268,6 +297,30 @@ export function createTimelineStore(
             error: error instanceof Error ? error.message : String(error),
           }));
         }
+      },
+
+      submit(hostId, agentId, submission) {
+        const key = timelineKey(hostId, agentId);
+        set((state) => {
+          const byKey = new Map(state.byKey);
+          const current = byKey.get(key) ?? EMPTY_STATE;
+          byKey.set(key, {
+            ...current,
+            submissions: [
+              ...current.submissions.filter((item) => item.messageId !== submission.messageId),
+              submission,
+            ],
+          });
+          return { byKey };
+        });
+      },
+
+      rejectSubmission(hostId, agentId, messageId) {
+        const key = timelineKey(hostId, agentId);
+        updateKey(key, (state) => ({
+          ...state,
+          submissions: state.submissions.filter((item) => item.messageId !== messageId),
+        }));
       },
 
       notifyStreamEvent(hostId, payload) {

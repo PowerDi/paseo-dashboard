@@ -269,7 +269,18 @@ export function createDashboardRuntime(
     },
 
     async sendAgentMessage(hostId, agentId, text) {
-      await requireClient(hostId).sendAgentMessage(agentId, text);
+      const messageId = crypto.randomUUID();
+      timelineStore.getState().submit(hostId, agentId, {
+        messageId,
+        text,
+        startedAt: Date.now(),
+      });
+      try {
+        await requireClient(hostId).sendAgentMessage(agentId, text, { messageId });
+      } catch (error) {
+        timelineStore.getState().rejectSubmission(hostId, agentId, messageId);
+        throw error;
+      }
     },
 
     async createAgent(hostId, options) {

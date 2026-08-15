@@ -98,6 +98,25 @@
   --code-fg: #e8e8e2;
 
   /*
+   * Code block palette. Every hljs / diff color reads a token from here so a
+   * theme swaps the whole block; never hardcode a syntax color at the rule.
+   */
+  --code-block-bg: color-mix(in srgb, var(--background) 84%, #0d1117);
+  --code-block-fg: #d8dee9;
+  --code-block-label: var(--foreground-faint);
+  --code-comment: #7f8c9d;
+  --code-keyword: #ff7b72;
+  --code-string: #a5d6a7;
+  --code-number: #79c0ff;
+  --code-variable: #ffa198;
+  --code-diff-add: #239764;
+  --code-diff-remove: #dc4f55;
+  --code-diff-hunk: #168fc7;
+  --code-diff-add-text: color-mix(in srgb, #7ee2a8 86%, var(--foreground));
+  --code-diff-remove-text: color-mix(in srgb, #ff9b9f 86%, var(--foreground));
+  --code-diff-hunk-text: color-mix(in srgb, #78c8eb 82%, var(--foreground));
+
+  /*
    * Typography weights (app-wide):
    *  400 regular  — body, nav, lists, settings labels, prose
    *  500 medium   — buttons, badges, selected emphasis
@@ -116,6 +135,81 @@
   --content-max: 820px;
   --composer-max: 760px;
   --shadow-soft: 0 16px 48px rgb(0 0 0 / 45%);
+  --selection: rgb(242 242 240 / 20%);
+  --scrollbar-thumb: #3a3a3a;
+  --scrollbar-thumb-hover: #555555;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --background: #f6f6f3;
+  --foreground: #242424;
+  --foreground-muted: #686863;
+  --foreground-subtle: #85857e;
+  --foreground-faint: #aaa9a1;
+
+  --surface-panel: #ffffff;
+  --surface-muted: #e9e9e4;
+  --surface-soft: #efefeb;
+  --sidebar: #edede9;
+  --sidebar-hover: #e4e4df;
+  --sidebar-selected: #deded8;
+
+  --card: var(--surface-panel);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface-panel);
+  --popover-foreground: var(--foreground);
+  --surface: var(--surface-soft);
+  --surface-hover: var(--surface-muted);
+  --composer: #ffffff;
+  --composer-border: #d9d9d3;
+  --composer-protrusion: #e6e6e0;
+
+  --primary: #242424;
+  --primary-foreground: #ffffff;
+  --secondary: var(--surface-muted);
+  --secondary-foreground: #363631;
+  --muted: #e9e9e4;
+  --muted-foreground: var(--foreground-muted);
+  --accent: var(--surface-muted);
+  --accent-foreground: var(--foreground);
+  --destructive: #c83f3f;
+
+  --border: #d9d9d3;
+  --border-strong: #c5c5be;
+  --border-subtle: #e2e2dc;
+  --divider: #e7e7e1;
+  --input: #d1d1ca;
+  --ring: #77776f;
+
+  --link: #216db2;
+  --success: #16845a;
+  --warning: #a96c00;
+  --danger: #c83f3f;
+  --running: #356bd2;
+  --code-bg: #f0f0eb;
+  --code-fg: #242424;
+
+  --code-block-bg: #fbfbf9;
+  --code-block-fg: #2c3038;
+  --code-block-label: var(--foreground-subtle);
+  --code-comment: #6b7785;
+  --code-keyword: #b3212f;
+  --code-string: #1f6b3a;
+  --code-number: #14507f;
+  --code-variable: #9a3412;
+  --code-diff-add: #1a8a5c;
+  --code-diff-remove: #c8444a;
+  --code-diff-hunk: #1476a8;
+  --code-diff-add-text: #10603d;
+  --code-diff-remove-text: #96262c;
+  --code-diff-hunk-text: #0f4f70;
+  --group-label-color: #85857e;
+  --shadow-soft: 0 16px 48px rgb(30 30 20 / 12%);
+  --selection: rgb(36 36 36 / 16%);
+  --scrollbar-thumb: #c8c8c1;
+  --scrollbar-thumb-hover: #adada5;
 }
 
 :root {
@@ -176,7 +270,7 @@
   }
 
   ::selection {
-    background: rgb(242 242 240 / 20%);
+    background: var(--selection);
   }
 
   ::-webkit-scrollbar {
@@ -191,12 +285,12 @@
   ::-webkit-scrollbar-thumb {
     border: 2px solid transparent;
     border-radius: 999px;
-    background: #3a3a3a;
+    background: var(--scrollbar-thumb);
     background-clip: padding-box;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #555555;
+    background: var(--scrollbar-thumb-hover);
     background-clip: padding-box;
   }
 }
@@ -482,7 +576,7 @@
 /* ── Code blocks (highlight.js + diff rows, zeno parity) ────────────── */
 
 .content-code-block {
-  --content-code-bg: color-mix(in srgb, var(--background) 84%, #0d1117);
+  --content-code-bg: var(--code-block-bg);
   overflow: hidden;
   margin: 10px 0;
   border: 1px solid var(--border-subtle);
@@ -496,7 +590,7 @@
   justify-content: space-between;
   border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 76%, transparent);
   padding: 0 7px 0 11px;
-  color: var(--foreground-faint);
+  color: var(--code-block-label);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -504,11 +598,11 @@
 }
 .content-code-language {
   background: transparent;
-  color: var(--foreground-faint);
+  color: var(--code-block-label);
   text-transform: uppercase;
 }
 .content-code-header button {
-  color: var(--foreground-faint);
+  color: var(--code-block-label);
 }
 .content-code-block .content-code-pre {
   max-height: 560px;
@@ -527,7 +621,7 @@
   border-radius: 0;
   background: transparent;
   padding: 0;
-  color: #d8dee9;
+  color: var(--code-block-fg);
   font-size: 12px;
   line-height: 1.62;
   tab-size: 2;
@@ -544,7 +638,7 @@
 }
 .hljs-comment,
 .hljs-quote {
-  color: #7f8c9d;
+  color: var(--code-comment);
   font-style: italic;
 }
 .hljs-keyword,
@@ -552,7 +646,7 @@
 .hljs-literal,
 .hljs-section,
 .hljs-link {
-  color: #ff7b72;
+  color: var(--code-keyword);
 }
 .hljs-string,
 .hljs-title,
@@ -562,20 +656,20 @@
 .hljs-symbol,
 .hljs-bullet,
 .hljs-addition {
-  color: #a5d6a7;
+  color: var(--code-string);
 }
 .hljs-number,
 .hljs-meta,
 .hljs-built_in,
 .hljs-builtin-name,
 .hljs-params {
-  color: #79c0ff;
+  color: var(--code-number);
 }
 .hljs-variable,
 .hljs-template-variable,
 .hljs-regexp,
 .hljs-deletion {
-  color: #ffa198;
+  color: var(--code-variable);
 }
 
 .content-diff-lines {
@@ -604,13 +698,13 @@
   background: var(--content-code-bg);
 }
 .content-diff-line[data-diff="add"] .content-diff-ln {
-  background: color-mix(in srgb, #239764 16%, var(--content-code-bg));
+  background: color-mix(in srgb, var(--code-diff-add) 16%, var(--content-code-bg));
 }
 .content-diff-line[data-diff="remove"] .content-diff-ln {
-  background: color-mix(in srgb, #dc4f55 16%, var(--content-code-bg));
+  background: color-mix(in srgb, var(--code-diff-remove) 16%, var(--content-code-bg));
 }
 .content-diff-line[data-diff="hunk"] .content-diff-ln {
-  background: color-mix(in srgb, #168fc7 13%, var(--content-code-bg));
+  background: color-mix(in srgb, var(--code-diff-hunk) 13%, var(--content-code-bg));
 }
 .content-diff-text {
   flex: 1 1 auto;
@@ -619,14 +713,14 @@
   white-space: pre;
 }
 .content-diff-line[data-diff="add"] {
-  background: color-mix(in srgb, #239764 16%, transparent);
-  color: color-mix(in srgb, #7ee2a8 86%, var(--foreground));
+  background: color-mix(in srgb, var(--code-diff-add) 16%, transparent);
+  color: var(--code-diff-add-text);
 }
 .content-diff-line[data-diff="remove"] {
-  background: color-mix(in srgb, #dc4f55 16%, transparent);
-  color: color-mix(in srgb, #ff9b9f 86%, var(--foreground));
+  background: color-mix(in srgb, var(--code-diff-remove) 16%, transparent);
+  color: var(--code-diff-remove-text);
 }
 .content-diff-line[data-diff="hunk"] {
-  background: color-mix(in srgb, #168fc7 13%, transparent);
-  color: color-mix(in srgb, #78c8eb 82%, var(--foreground));
+  background: color-mix(in srgb, var(--code-diff-hunk) 13%, transparent);
+  color: var(--code-diff-hunk-text);
 }

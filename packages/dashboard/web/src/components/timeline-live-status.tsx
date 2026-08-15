@@ -1,33 +1,37 @@
+import { Brain } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { formatElapsed } from "@/lib/format-time";
 import type { LiveActivity } from "@/lib/live-activity";
 
-/** Ticks once a second so the running counter advances without a global clock. */
-function useSecondsTick(enabled: boolean): number {
+function useSecondsTick(): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!enabled) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [enabled]);
+  }, []);
   return now;
 }
 
 export function TimelineLiveStatus({ activity }: { activity: LiveActivity }) {
   const { t } = useTranslation();
-  const now = useSecondsTick(activity.startedAt !== undefined);
-  const elapsed = activity.startedAt === undefined ? null : formatElapsed(now - activity.startedAt);
-
-  const label =
-    activity.phase === "tool" && activity.detail
-      ? t("workspace.timeline.runningTool", { detail: activity.detail })
-      : t("workspace.timeline.replying");
+  const [mountedAt] = useState(() => Date.now());
+  const now = useSecondsTick();
+  // A daemon timestamp can be missing or ahead of the browser clock. Keep the
+  // counter live in both cases instead of clamping it at 0s forever.
+  const startedAt =
+    activity.startedAt !== undefined && activity.startedAt <= mountedAt + 1_000
+      ? activity.startedAt
+      : mountedAt;
+  const elapsed = formatElapsed(now - startedAt);
 
   return (
-    <div className="timeline-live-status" role="status" aria-live="polite">
-      <span className="timeline-live-dot" aria-hidden="true" />
-      <span className="shimmer-text truncate">{label}</span>
+    <div
+      className="timeline-live-status"
+      role="status"
+      aria-label={t("workspace.timeline.thinking")}
+    >
+      <Brain className="timeline-live-spinner" size={15} strokeWidth={1.75} aria-hidden="true" />
       {elapsed ? <span className="timeline-live-elapsed">{elapsed}</span> : null}
     </div>
   );

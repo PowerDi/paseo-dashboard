@@ -373,11 +373,11 @@ M1/M2 里服务端和 contract 测试做完、Web 端从未接上的部分。这
 3. `GET /audit-events`（P2.4）：`product-requirements.md` 里「审计记录」是独立页面，现在没有。
 4. `GET /me`：`app-store` 靠 localStorage 缓存 user，刷新后显示的是缓存值。
 5. SSE 重连（P2.3）：server 已发 `id:` 并支持 `Last-Event-ID`，`dashboardEvents.ts` 能解析 id 但从不回传，也没有重连循环。流断掉（代理超时/网络抖动）后 Host 配置更新静默停止，直到用户刷新页面。
-6. 测试可达性：web 单测没有被任何 npm 脚本覆盖（`web/package.json` 无 `test` 脚本，`test:dashboard` 只跑 contract 和 e2e），CI 也完全不跑 dashboard 测试（`.github/workflows/ci.yml` 的测试 job 逐个点名 workspace）。
+6. 测试可达性：已修好，`web/package.json` 有 `test` 脚本，`test:dashboard` 三个包都跑。CI 不跑 dashboard 测试是有意的决定，不要加。
 
 **产出**
 
-- 上述路由的 Web client 方法与页面；SSE 断线自动恢复；dashboard 测试进入 npm 脚本与 CI。
+- 上述路由的 Web client 方法与页面；SSE 断线自动恢复。
 
 **验证**
 

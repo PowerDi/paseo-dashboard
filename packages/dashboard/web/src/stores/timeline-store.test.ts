@@ -52,6 +52,49 @@ function createClient(
 const KEY = timelineKey("host-a", "agent-1");
 
 describe("timeline store", () => {
+  test("keeps a submission until the canonical client message arrives", async () => {
+    const fetchAgentTimeline = vi
+      .fn<TimelineDataClient["fetchAgentTimeline"]>()
+      .mockResolvedValueOnce(page({ entries: [] }))
+      .mockResolvedValueOnce(
+        page({
+          entries: [
+            {
+              ...entry(0, 0, "hello"),
+              item: { type: "user_message", text: "hello", clientMessageId: "client-1" },
+            },
+          ],
+        }),
+      );
+    const store = createTimelineStore({ getClient: () => createClient(fetchAgentTimeline) });
+
+    await store.getState().open("host-a", "agent-1");
+    store.getState().submit("host-a", "agent-1", {
+      messageId: "client-1",
+      text: "hello",
+      startedAt: 100,
+    });
+    expect(store.getState().byKey.get(KEY)?.submissions).toHaveLength(1);
+
+    await store.getState().open("host-a", "agent-1");
+    expect(store.getState().byKey.get(KEY)?.submissions).toEqual([]);
+  });
+
+  test("removes a rejected submission", async () => {
+    const store = createTimelineStore({
+      getClient: () => createClient(async () => page({ entries: [] })),
+    });
+
+    store.getState().submit("host-a", "agent-1", {
+      messageId: "client-1",
+      text: "hello",
+      startedAt: 100,
+    });
+    store.getState().rejectSubmission("host-a", "agent-1", "client-1");
+
+    expect(store.getState().byKey.get(KEY)?.submissions).toEqual([]);
+  });
+
   test("open loads the tail page", async () => {
     const fetchAgentTimeline = vi.fn(async () =>
       page({ entries: [entry(0, 2), entry(3, 5)], hasOlder: true }),

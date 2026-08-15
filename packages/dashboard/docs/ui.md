@@ -20,7 +20,7 @@ Paseo 官方 App（`packages/app`、仓库根 `docs/design.md`）是另一套设
 
 ## 气质
 
-深色、密、安静。侧栏窄、主区低噪声、消息连续阅读、composer 贴底常驻。
+密、安静。侧栏窄、主区低噪声、消息连续阅读、composer 贴底常驻。深色是默认，亮色是同一套结构换一组 token。
 
 层级靠字重和颜色，不靠把字做大。正文 14px；结构标签 `500`；内容 `400`。可操作的用 `--foreground`，上下文用 `--foreground-muted` / `--foreground-subtle`。
 
@@ -33,7 +33,17 @@ Paseo 官方 App（`packages/app`、仓库根 `docs/design.md`）是另一套设
 | `web/src/globals.css` | 色、圆角、字阶、motion、markdown/code、层叠重置。注释即规范。 |
 | `web/src/App.css`     | 壳、侧栏、树、composer、header、timeline 的结构类。           |
 
-表面三级：`--surface-panel` `#2d2d2d`（卡片、菜单、输入）、`--surface-muted` `#383838`（hover / 选中）、`--surface-soft` `#272727`（用户气泡）。圆角 6 / 10 / 12（`--radius-sm/md/lg`）。
+表面三级：`--surface-panel`（卡片、菜单、输入）、`--surface-muted`（hover / 选中）、`--surface-soft`（用户气泡、终端底）。圆角 6 / 10 / 12（`--radius-sm/md/lg`）。
+
+### 主题
+
+两套：`[data-theme="dark"]`（同时挂在 `:root`，是默认）和 `[data-theme="light"]`。`stores/theme-store.ts` 是唯一入口——写 `data-theme` + `color-scheme`，存 localStorage（`paseo-dashboard-theme`），并派发 `THEME_CHANGE_EVENT`。切换器在设置页「偏好」和侧栏底部。
+
+加主题相关的颜色时：**先加 token，两套主题各给一份**，再在规则里用 `var()`。写死 hex 的代价是亮色下直接崩——代码块的 hljs 语法色、diff 增删底色、滚动条、选区、composer 聚焦背景当初都是写死的，亮色主题第一版整块代码块是灰底浅字。`color-mix(… var(--background) …)` 也不安全：混出来的结果跟着主题反向跑。
+
+`--code-*` 那一组（`--code-block-bg/-fg/-label`、`--code-comment/-keyword/-string/-number/-variable`、`--code-diff-*`）拥有代码块的全部配色，两套主题都定义完整。
+
+xterm 不读 CSS 变量（canvas 测量字形，`fontFamily` 也要写完整字体栈）。`terminal-view.tsx` 用 `getComputedStyle` 取 token 值，并监听 `THEME_CHANGE_EVENT` 重设 `terminal.options.theme`。
 
 字符串一律走 i18n（`web/src/i18n/`）。`zh-CN.ts` 是字典事实来源，`en.ts` 用 `typeof zhCN` 约束。`t()` 拼错 key 会编译失败。不要在 JSX 里写死用户可见文案。语言检测顺序：localStorage（`paseo-dashboard-language`）→ navigator；切换器在设置页「偏好」。
 
@@ -72,7 +82,15 @@ daemon 只报 `running` / `idle` / `error`。没有 thinking / executing / compa
 两层都要有：
 
 1. 侧栏 marker（扫一眼）。
-2. 时间线末尾 `TimelineLiveStatus`：流光文案（「正在回复…」或当前工具摘要）+ 经过时间。`role="status"`。
+2. 时间线末尾 `TimelineLiveStatus`：图标 + 经过时间，`role="status"`。**不显示状态文案**——「正在回复…」「思考中」这类固定词对不上 agent 真实状态，只会让人盯着一个假标签；图标和计时已经说明它在动。图标参照 zeno `TimelineRow.tsx` 的 `liveStatusIcon`。
+
+计时的起点：优先用 daemon 时间戳，但 daemon 的钟可能比浏览器快，负的经过时间会被 `formatElapsed` 钳成 `0s` 并一直卡住。时间戳缺失或超前 1s 以上就从组件挂载时刻起算。
+
+### 发消息
+
+发送后立刻在时间线末尾出现用户气泡，紧接着是活动指示器——一次连续的状态，不是「先出指示器、再把气泡插到它上面」。
+
+实现在 `timeline-store` 的 `submissions`：runtime 发消息前生成 `messageId` 写入 store，daemon 把它当 `user_message.clientMessageId` 回来后按 ID 移除乐观条目，RPC 失败只回滚这一条。两种错误做法——按文本匹配（连发同样内容会错配）、靠 agent `running` 状态清理（状态与 timeline 不同帧到达，中间会闪一段空白）。canonical 与乐观气泡共用 `submission:<id>` 这个 React key，接管时不重新挂载。
 
 ### 时间线
 
@@ -93,10 +111,13 @@ daemon 只报 `running` / `idle` / `error`。没有 thinking / executing / compa
 - 把发送箭头绝对定位进 textarea。
 - 从 `packages/app` 抄 RN 组件或 Unistyles token。
 - 在 layer 外写新的全局 `* { padding/margin }`。
+- 写死颜色。颜色进 token，两套主题各一份。
+- 给活动指示器加状态文案。
 
 ## 验证
 
 - 间距看起来挤：先看计算 padding/margin 是不是 0（层叠），再改 class。
+- 改颜色：两套主题都截图。代码块、diff、终端最容易只在深色下对。
 - Playwright 用 `http://localhost:5173`。server Origin 白名单不认别的 vite 端口，登录会 403。
 - headless 截图时入场动画首帧全透明（`startTime: null`）。截图前 `mouse.move` + `wheel` 推进合成。
 - web 单测走 `npm run test --workspace=@getpaseo/dashboard-web`（该包自己的 `@` 别名）。不要从仓库根 `npx vitest run packages/dashboard/web/src`。

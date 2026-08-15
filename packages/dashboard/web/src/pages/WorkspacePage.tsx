@@ -93,7 +93,12 @@ export function WorkspacePage({
   const lastSeqRef = useRef<number>(-1);
   const [atBottom, setAtBottom] = useState(true);
   const status = context ? sessionStatus(context.entry.agent.status) : "idle";
-  const liveActivity = deriveLiveActivity({ status, entries: timeline?.entries ?? [] });
+  const latestSubmission = timeline?.submissions.at(-1);
+  const liveActivity = deriveLiveActivity({
+    status,
+    entries: timeline?.entries ?? [],
+    pendingPrompt: latestSubmission ? { startedAt: latestSubmission.startedAt } : undefined,
+  });
 
   // Keep the view pinned to the newest entry unless the user scrolled up.
   useEffect(() => {
@@ -383,6 +388,7 @@ export function WorkspacePage({
               <TimelineView
                 timeline={timeline}
                 liveActivity={liveActivity}
+                pendingUserMessages={timeline?.submissions ?? []}
                 onLoadOlder={loadOlder}
               />
 

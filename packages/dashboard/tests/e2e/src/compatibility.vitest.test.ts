@@ -122,10 +122,12 @@ describe("Daemon version compatibility", () => {
 
       const features = getDaemonFeatures(serverInfo);
 
-      // Should not throw, should only extract known features
+      // Should not throw, should only extract known features. Assert the unknown
+      // key is dropped rather than a key count, so adding a feature to
+      // DaemonFeatures doesn't break this test.
       expect(features.terminalRestoreModes).toBe(true);
       expect(features.selectiveAgentTimeline).toBe(true);
-      expect(Object.keys(features)).toHaveLength(2);
+      expect(features).not.toHaveProperty("unknownFeature");
     });
   });
 

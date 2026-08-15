@@ -611,32 +611,29 @@ button.dashboard-list-row:hover {
   }
 }
 
-/* Trailing "agent is working" line; the label itself carries the shimmer. */
+/* Trailing indicator while the agent is working. */
 .timeline-live-status {
   display: flex;
   align-items: center;
-  gap: 8px;
   min-width: 0;
+  min-height: 24px;
+  gap: 6px;
   padding: 2px 2px 2px 0;
-  font-size: 12.5px;
+  color: var(--foreground-faint);
 }
 
-.timeline-live-dot {
-  flex: 0 0 6px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--running);
-  animation: status-pulse-solid 1.4s ease-in-out infinite;
+.timeline-live-spinner {
+  color: var(--foreground-faint);
+  animation: timeline-live-pulse 1.4s ease-in-out infinite;
 }
 
 .timeline-live-elapsed {
-  flex: 0 0 auto;
   color: var(--foreground-faint);
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
-@keyframes status-pulse-solid {
+@keyframes timeline-live-pulse {
   0%,
   100% {
     opacity: 0.45;
@@ -770,7 +767,7 @@ button.dashboard-list-row:hover {
   height: 15px;
   border: 1px solid var(--border-strong);
   border-radius: 4px;
-  color: #111111;
+  color: var(--primary-foreground);
   font-size: 10px;
 }
 
@@ -940,7 +937,7 @@ button.dashboard-list-row:hover {
 
 .composer-card:focus-within {
   border-color: var(--border-strong);
-  background: #2e2e2e;
+  background: var(--surface-panel);
 }
 
 .composer-card.is-attached {

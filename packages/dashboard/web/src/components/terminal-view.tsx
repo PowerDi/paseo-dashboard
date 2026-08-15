@@ -2,6 +2,7 @@ import { renderTerminalSnapshotToAnsi } from "@getpaseo/protocol/terminal-snapsh
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useEffect, useRef, useState } from "react";
+import { THEME_CHANGE_EVENT } from "../stores/theme-store";
 import { useTranslation } from "react-i18next";
 import type {
   TerminalSession,
@@ -21,12 +22,16 @@ interface TerminalViewProps {
   openSession: TerminalSessionOpener;
 }
 
-const TERMINAL_THEME = {
-  background: "#272727",
-  foreground: "#f2f2f0",
-  cursor: "#f2f2f0",
-  selectionBackground: "#4a4a4a",
-};
+function terminalTheme() {
+  const styles = getComputedStyle(document.documentElement);
+  const color = (name: string) => styles.getPropertyValue(name).trim();
+  return {
+    background: color("--surface-soft"),
+    foreground: color("--foreground"),
+    cursor: color("--foreground"),
+    selectionBackground: color("--surface-muted"),
+  };
+}
 
 export function TerminalView({ openSession }: TerminalViewProps) {
   const { t } = useTranslation();
@@ -44,8 +49,10 @@ export function TerminalView({ openSession }: TerminalViewProps) {
       // resolve CSS variables — spell the stack out.
       fontFamily: '"SF Mono", "JetBrains Mono", Menlo, Consolas, monospace',
       fontSize: 13,
-      theme: TERMINAL_THEME,
+      theme: terminalTheme(),
     });
+    const updateTheme = () => (terminal.options.theme = terminalTheme());
+    globalThis.addEventListener(THEME_CHANGE_EVENT, updateTheme);
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     terminal.open(container);
@@ -76,6 +83,7 @@ export function TerminalView({ openSession }: TerminalViewProps) {
     resizeObserver.observe(container);
 
     return () => {
+      globalThis.removeEventListener(THEME_CHANGE_EVENT, updateTheme);
       resizeObserver.disconnect();
       dataDisposable.dispose();
       session.dispose();
@@ -84,11 +92,11 @@ export function TerminalView({ openSession }: TerminalViewProps) {
   }, [openSession]);
 
   return (
-    <div className="relative h-full min-h-0 w-full overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[#272727]">
+    <div className="relative h-full min-h-0 w-full overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-soft)]">
       <div ref={containerRef} className="h-full w-full p-2" />
       {status.phase !== "attached" && (
         <div
-          className="absolute inset-0 flex items-center justify-center bg-[#272727]/80 text-[13px] text-[var(--foreground-muted)]"
+          className="absolute inset-0 flex items-center justify-center bg-[var(--surface-soft)]/80 text-[13px] text-[var(--foreground-muted)]"
           role="status"
         >
           {status.phase === "attaching" && t("workspace.terminal.attaching")}

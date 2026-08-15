@@ -12,6 +12,7 @@ import {
   Server,
   Settings,
   Shield,
+  Sun,
   SquarePen,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -25,6 +26,7 @@ import type {
   SidebarSessionNode,
 } from "@/lib/agent-tree";
 import { cn } from "@/lib/utils";
+import { useThemeStore } from "@/stores/theme-store";
 
 export type Page = "workspace" | "hosts" | "agents" | "devices" | "audit" | "settings";
 
@@ -71,6 +73,8 @@ export function Shell({
   onSelectProjectForNewSession,
 }: ShellProps) {
   const { t } = useTranslation();
+  const theme = useThemeStore((state) => state.theme);
+  const setTheme = useThemeStore((state) => state.setTheme);
   const [collapsed, setCollapsed] = useState(false);
   // Hosts load asynchronously, so track the rows the user closed instead of
   // the ones that are open — new data arrives expanded by default.
@@ -274,6 +278,15 @@ export function Shell({
           className="dashboard-sidebar-footer"
           aria-hidden={collapsed || undefined}
         >
+          <button
+            className="dashboard-nav-item"
+            aria-label={t(`settings.theme.${theme === "dark" ? "light" : "dark"}`)}
+            title={t(`settings.theme.${theme === "dark" ? "light" : "dark"}`)}
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            <Sun size={16} />
+            <span>{t(`settings.theme.${theme}`)}</span>
+          </button>
           <button
             className={cn("dashboard-nav-item", page === "settings" && "is-selected")}
             onClick={() => onPageChange("settings")}

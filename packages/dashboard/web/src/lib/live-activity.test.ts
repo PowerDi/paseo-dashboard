@@ -15,23 +15,23 @@ function entry(item: TimelineEntry["item"], timestamp: string, seq: number): Tim
 }
 
 describe("deriveLiveActivity", () => {
+  it("shows activity immediately while a prompt is being accepted", () => {
+    expect(
+      deriveLiveActivity({ status: "idle", entries: [], pendingPrompt: { startedAt: 100 } }),
+    ).toEqual({ phase: "thinking", startedAt: 100 });
+  });
   it("returns null unless the agent is running", () => {
     const entries = [entry({ type: "user_message", text: "hi" }, "2026-08-13T10:00:00.000Z", 1)];
     expect(deriveLiveActivity({ status: "idle", entries })).toBeNull();
     expect(deriveLiveActivity({ status: "error", entries })).toBeNull();
   });
 
-  it("returns null when the newest entry is a completed assistant message", () => {
+  it("keeps the activity row while assistant text is arriving", () => {
     const activity = deriveLiveActivity({
       status: "running",
-      entries: [
-        entry({ type: "user_message", text: "hi" }, "2026-08-13T10:00:00.000Z", 1),
-        entry({ type: "assistant_message", text: "on it" }, "2026-08-13T10:00:05.000Z", 2),
-      ],
+      entries: [entry({ type: "assistant_message", text: "on it" }, "2026-08-13T10:00:05.000Z", 2)],
     });
-    // Even though status is still "running" (daemon hasn't sent agent_update yet),
-    // a completed assistant message means the turn is done.
-    expect(activity).toBeNull();
+    expect(activity).toEqual({ phase: "thinking" });
   });
 
   it("surfaces the command of a running tool call", () => {
@@ -78,7 +78,7 @@ describe("deriveLiveActivity", () => {
         ),
       ],
     });
-    expect(activity).toEqual({ phase: "replying" });
+    expect(activity).toEqual({ phase: "thinking" });
   });
 
   it("uses the most recent user message as the turn start", () => {
@@ -93,12 +93,12 @@ describe("deriveLiveActivity", () => {
   });
 
   it("omits the start when no user message is loaded or the timestamp is unparsable", () => {
-    expect(deriveLiveActivity({ status: "running", entries: [] })).toEqual({ phase: "replying" });
+    expect(deriveLiveActivity({ status: "running", entries: [] })).toEqual({ phase: "thinking" });
     expect(
       deriveLiveActivity({
         status: "running",
         entries: [entry({ type: "user_message", text: "hi" }, "not-a-date", 1)],
       }),
-    ).toEqual({ phase: "replying" });
+    ).toEqual({ phase: "thinking" });
   });
 });

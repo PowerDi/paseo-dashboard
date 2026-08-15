@@ -148,10 +148,12 @@ function LoadOlderSentinel({
 export function TimelineView({
   timeline,
   liveActivity,
+  pendingUserMessages,
   onLoadOlder,
 }: {
   timeline: AgentTimelineState | null;
   liveActivity: LiveActivity | null;
+  pendingUserMessages?: readonly { messageId: string; text: string }[];
   onLoadOlder: () => void;
 }) {
   const { t } = useTranslation();
@@ -185,13 +187,22 @@ export function TimelineView({
         // caps entry count; this caps render cost). The intrinsic size keeps
         // the scrollbar stable while items are unrendered.
         <div
-          key={`${entry.seqStart}-${entry.seqEnd}`}
+          key={
+            entry.item.type === "user_message" && entry.item.clientMessageId
+              ? `submission:${entry.item.clientMessageId}`
+              : `${entry.seqStart}-${entry.seqEnd}`
+          }
           className={cn(
             "[contain-intrinsic-size:auto_64px] [content-visibility:auto]",
             entry.item.type === "user_message" && "pt-3",
           )}
         >
           <TimelineItemView entry={entry} />
+        </div>
+      ))}
+      {pendingUserMessages?.map((message) => (
+        <div className="flex justify-end pt-3" key={`submission:${message.messageId}`}>
+          <div className="thread-user-bubble opacity-70">{message.text}</div>
         </div>
       ))}
       {liveActivity && <TimelineLiveStatus activity={liveActivity} />}

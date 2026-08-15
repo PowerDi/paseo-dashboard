@@ -8,6 +8,7 @@ import { SUPPORTED_LANGUAGES } from "@/i18n";
 import { revealDelay, useReveal } from "@/lib/use-reveal";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
+import { useThemeStore } from "@/stores/theme-store";
 import { useHostSyncStore } from "@/stores/host-sync-store";
 import { changePassword } from "@/api/dashboardApi";
 
@@ -53,6 +54,32 @@ function LanguageSwitch() {
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function ThemeSwitch() {
+  const { t } = useTranslation();
+  const theme = useThemeStore((state) => state.theme);
+  const setTheme = useThemeStore((state) => state.setTheme);
+
+  return (
+    <div className="flex shrink-0 items-center gap-1 rounded-[var(--radius-md)] bg-[var(--surface-soft)] p-1">
+      {(["dark", "light"] as const).map((value) => (
+        <button
+          key={value}
+          className={cn(
+            "cursor-pointer rounded-[var(--radius-sm)] px-3 py-1 text-[13px] transition-colors",
+            theme === value
+              ? "bg-[var(--surface-muted)] text-[var(--foreground)]"
+              : "text-[var(--foreground-subtle)] hover:text-[var(--foreground-muted)]",
+          )}
+          aria-pressed={theme === value}
+          onClick={() => setTheme(value)}
+        >
+          {t(`settings.theme.${value}`)}
+        </button>
+      ))}
     </div>
   );
 }
@@ -209,10 +236,18 @@ export function SettingsPage() {
             />
           </div>
 
-          <div className="mt-8">
-            <SectionLabel style={revealDelay(2)}>{t("settings.account")}</SectionLabel>
+          <div data-reveal="" style={revealDelay(2)}>
+            <SettingRow
+              title={t("settings.theme.title")}
+              description={t("settings.theme.hint")}
+              action={<ThemeSwitch />}
+            />
           </div>
-          <div data-reveal="" style={revealDelay(3)}>
+
+          <div className="mt-8">
+            <SectionLabel style={revealDelay(3)}>{t("settings.account")}</SectionLabel>
+          </div>
+          <div data-reveal="" style={revealDelay(4)}>
             <SettingRow
               title={t("settings.email")}
               description={user?.email ?? t("settings.emailUnknown")}

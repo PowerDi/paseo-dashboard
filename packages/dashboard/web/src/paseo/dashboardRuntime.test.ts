@@ -235,7 +235,9 @@ class RuntimeClient implements DaemonClientLike, DaemonDataClient {
   readonly cancelAgent = vi.fn(async (_agentId: string) => undefined);
   readonly setAgentTimelineSubscription = vi.fn(async (_agentIds: string[]) => undefined);
   readonly fetchAgentTimeline = vi.fn(async (agentId: string) => timelinePage(agentId));
-  readonly sendAgentMessage = vi.fn(async (_agentId: string, _text: string) => undefined);
+  readonly sendAgentMessage = vi.fn(
+    async (_agentId: string, _text: string, _options?: { messageId?: string }) => undefined,
+  );
   readonly createAgent = vi.fn(async () => ({
     ...agentEntry(this.hostId).agent,
     id: `created-${this.hostId}`,
@@ -462,7 +464,9 @@ describe("dashboard Paseo runtime", () => {
 
     await runtime.sendAgentMessage("host-a", "agent-host-a", "hello");
 
-    expect(clients.get("host-a")?.sendAgentMessage).toHaveBeenCalledWith("agent-host-a", "hello");
+    expect(clients.get("host-a")?.sendAgentMessage).toHaveBeenCalledWith("agent-host-a", "hello", {
+      messageId: expect.any(String),
+    });
   });
 
   test("createAgent forwards options and returns the snapshot", async () => {

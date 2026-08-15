@@ -12,6 +12,10 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 
 const PAGE_LIMIT = 200;
 
+function agentSubscriptionId(hostId: string): string {
+  return `dashboard:${hostId}`;
+}
+
 export type DaemonProject = WorkspaceProjectDescriptorPayload;
 export type DaemonWorkspace = FetchWorkspacesResponseMessage["payload"]["entries"][number];
 export type DaemonAgentEntry = FetchAgentsResponseMessage["payload"]["entries"][number];
@@ -29,7 +33,11 @@ interface PageOptions {
 export interface DaemonDataClient {
   listProjects(requestId?: string): Promise<ProjectListResponseMessage["payload"]>;
   fetchWorkspaces(options?: PageOptions): Promise<FetchWorkspacesResponseMessage["payload"]>;
-  fetchAgents(options?: PageOptions): Promise<FetchAgentsResponseMessage["payload"]>;
+  fetchAgents(
+    options?: PageOptions & {
+      subscribe?: { subscriptionId?: string };
+    },
+  ): Promise<FetchAgentsResponseMessage["payload"]>;
 }
 
 export interface DaemonResourceState<T> {
@@ -244,6 +252,7 @@ export function createDaemonDataStore(
         do {
           const response = await client.fetchAgents({
             page: { limit: PAGE_LIMIT, ...(cursor ? { cursor } : {}) },
+            ...(!cursor ? { subscribe: { subscriptionId: agentSubscriptionId(hostId) } } : {}),
           });
           if (!isCurrentRequest(hostId, "agents", version)) return;
           entries.push(...response.entries);

@@ -122,9 +122,34 @@ describe("daemon data store", () => {
     });
     expect(listProjects).toHaveBeenCalledOnce();
     expect(fetchWorkspaces).toHaveBeenCalledWith({ page: { limit: 200 } });
-    expect(fetchAgents).toHaveBeenCalledWith({ page: { limit: 200 } });
+    expect(fetchAgents).toHaveBeenCalledWith({
+      page: { limit: 200 },
+      subscribe: { subscriptionId: "dashboard:host-a" },
+    });
   });
 
+  test("subscribes only while loading the first agent page", async () => {
+    const fetchAgents = vi
+      .fn<DaemonDataClient["fetchAgents"]>()
+      .mockResolvedValueOnce({
+        requestId: "req-agents-first",
+        entries: [agentEntry("agent-1", "main")],
+        pageInfo: { nextCursor: "next", prevCursor: null, hasMore: true },
+      })
+      .mockResolvedValueOnce(agentResult(agentEntry("agent-2", "main")));
+    const store = createDaemonDataStore({
+      getClient: () => createClient({ fetchAgents }),
+      now: () => 1234,
+    });
+
+    await store.getState().loadAgents("host-a");
+
+    expect(fetchAgents).toHaveBeenNthCalledWith(1, {
+      page: { limit: 200 },
+      subscribe: { subscriptionId: "dashboard:host-a" },
+    });
+    expect(fetchAgents).toHaveBeenNthCalledWith(2, { page: { limit: 200, cursor: "next" } });
+  });
   test("can retry after a failed load", async () => {
     const listProjects = vi
       .fn<DaemonDataClient["listProjects"]>()
