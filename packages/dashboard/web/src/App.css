@@ -561,6 +561,205 @@ button.dashboard-list-row:hover {
   flex: 1;
 }
 
+/* Read-only workspace file explorer. */
+.workspace-file-explorer {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-panel);
+}
+
+.workspace-file-tree {
+  display: flex;
+  flex: 0 0 280px;
+  min-width: 180px;
+  max-width: 42%;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--divider);
+  background: var(--surface-soft);
+}
+
+.workspace-file-tree-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--divider);
+  color: var(--foreground-muted);
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+}
+
+.workspace-file-tree-header span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-file-tree-content {
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 0;
+}
+
+.workspace-file-tree-row {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  padding-top: 5px;
+  padding-right: 10px;
+  padding-bottom: 5px;
+  color: var(--foreground-muted);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+  transition:
+    background var(--dur-instant) var(--ease-standard),
+    color var(--dur-instant) var(--ease-standard);
+}
+
+.workspace-file-tree-row:hover {
+  background: var(--surface-muted);
+  color: var(--foreground);
+}
+
+.workspace-file-tree-row.is-selected {
+  background: var(--surface-muted);
+  color: var(--foreground);
+}
+
+.workspace-file-tree-spacer {
+  display: block;
+  width: 13px;
+  flex: 0 0 13px;
+}
+
+.workspace-file-tree-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--foreground-subtle);
+}
+
+.workspace-file-tree-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-file-tree-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+  padding-right: 12px;
+  padding-bottom: 8px;
+  color: var(--foreground-faint);
+  font-size: 12px;
+}
+
+.workspace-file-tree-error,
+.workspace-file-viewer-error {
+  color: var(--danger);
+}
+
+.workspace-file-spinner {
+  flex: 0 0 auto;
+  animation: file-explorer-spin 1s linear infinite;
+}
+
+@keyframes file-explorer-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.workspace-file-viewer {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.workspace-file-state {
+  display: flex;
+  flex: 1;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--foreground-faint);
+  font-size: 13px;
+  text-align: center;
+}
+
+.workspace-file-viewer-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.workspace-file-viewer-path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-file-viewer-meta {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 10px;
+  color: var(--foreground-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.workspace-file-viewer-content {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 14px;
+}
+
+.workspace-file-viewer-content .content-code-block {
+  min-width: max-content;
+}
+
+@media (max-width: 640px) {
+  .workspace-file-explorer {
+    flex-direction: column;
+  }
+
+  .workspace-file-tree {
+    display: block;
+    flex: 0 0 220px;
+    max-width: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--divider);
+  }
+
+  .workspace-file-viewer-meta {
+    display: none;
+  }
+}
+
 /* Wrapper exists so the return-to-bottom button can float over the scroll area. */
 .workspace-thread-viewport {
   position: relative;

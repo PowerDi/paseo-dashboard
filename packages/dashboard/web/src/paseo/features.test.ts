@@ -7,6 +7,7 @@ describe("getDaemonFeatures", () => {
     const features = getDaemonFeatures(null);
     expect(features.selectiveAgentTimeline).toBe(false);
     expect(features.terminalRestoreModes).toBe(false);
+    expect(features.workspaceFileEditing).toBe(false);
   });
 
   test("returns all false when features object is missing", () => {
@@ -19,6 +20,7 @@ describe("getDaemonFeatures", () => {
     const features = getDaemonFeatures(serverInfo);
     expect(features.selectiveAgentTimeline).toBe(false);
     expect(features.terminalRestoreModes).toBe(false);
+    expect(features.workspaceFileEditing).toBe(false);
   });
 
   test("returns false for features not advertised by daemon", () => {
@@ -32,6 +34,7 @@ describe("getDaemonFeatures", () => {
     const features = getDaemonFeatures(serverInfo);
     expect(features.selectiveAgentTimeline).toBe(false);
     expect(features.terminalRestoreModes).toBe(false);
+    expect(features.workspaceFileEditing).toBe(false);
   });
 
   test("returns true for selectiveAgentTimeline when advertised", () => {
@@ -44,6 +47,20 @@ describe("getDaemonFeatures", () => {
     };
     const features = getDaemonFeatures(serverInfo);
     expect(features.selectiveAgentTimeline).toBe(true);
+    expect(features.terminalRestoreModes).toBe(false);
+  });
+
+  test("returns true for workspaceFileEditing when advertised", () => {
+    const serverInfo: ServerInfoStatusPayload = {
+      status: "server_info",
+      serverId: "test-server",
+      hostname: null,
+      version: "0.2.0",
+      features: { workspaceFileEditing: true },
+    };
+    const features = getDaemonFeatures(serverInfo);
+    expect(features.workspaceFileEditing).toBe(true);
+    expect(features.selectiveAgentTimeline).toBe(false);
     expect(features.terminalRestoreModes).toBe(false);
   });
 
@@ -69,11 +86,13 @@ describe("getDaemonFeatures", () => {
       features: {
         selectiveAgentTimeline: true,
         "terminal-restore-modes": true,
+        workspaceFileEditing: true,
       },
     };
     const features = getDaemonFeatures(serverInfo);
     expect(features.selectiveAgentTimeline).toBe(true);
     expect(features.terminalRestoreModes).toBe(true);
+    expect(features.workspaceFileEditing).toBe(true);
   });
 
   test("ignores unrelated features from protocol", () => {
@@ -90,6 +109,7 @@ describe("getDaemonFeatures", () => {
     const features = getDaemonFeatures(serverInfo);
     expect(features.selectiveAgentTimeline).toBe(true);
     expect(features.terminalRestoreModes).toBe(false);
+    expect(features.workspaceFileEditing).toBe(false);
   });
 });
 
@@ -118,6 +138,7 @@ describe("isCompatibleDaemon", () => {
       features: {
         selectiveAgentTimeline: true,
         "terminal-restore-modes": true,
+        workspaceFileEditing: true,
       },
     };
     expect(isCompatibleDaemon(serverInfo)).toBe(true);

@@ -17,7 +17,7 @@ Dashboard 通过 `server_info.features.*` 实现特性门控（feature gating）
 | v0.1.80-    | 无 `features` 字段                                                 | 所有特性门控返回 `false`，相关功能不可用               |
 | v0.1.81+    | `{ "terminal-restore-modes": true }`                               | Terminal 支持 restore options（mode、scrollbackLines） |
 | v0.1.106+   | `{ "terminal-restore-modes": true, selectiveAgentTimeline: true }` | + Agent timeline 选择性订阅（viewAgent/leaveAgent）    |
-| v0.2.0+     | （待定新功能）                                                     | 按实际 feature flags 门控                              |
+| v0.2.0+     | `workspaceFileEditing: true`                                       | + Workspace 文件只读查看与文件变更订阅                 |
 
 ## 特性门控列表
 
@@ -41,17 +41,27 @@ Dashboard 当前使用的所有 feature gates（位于 `web/src/paseo/features.t
   - **有 feature**：传递 `restore: { mode: "ansi-stream", scrollbackLines: 10000 }` 参数
   - **无 feature**：不传递 restore 参数，daemon 会发送 `snapshot` 帧（Dashboard 用 `renderTerminalSnapshotToAnsi` 重放）
 
+### 3. `workspaceFileEditing`
+
+- **添加版本**：v0.2.0
+- **用途**：daemon 支持 `fs.file.subscribe` 文件版本订阅和同组文件写入 RPC；Dashboard P3.7.1 只使用订阅部分。
+- **门控位置**：`web/src/pages/WorkspacePage.tsx` 的 Workspace 视图切换。
+- **行为**：
+  - **有 feature**：显示「文件」视图，使用 `listDirectory`、`readFile` 和 `subscribeFile`。
+  - **无 feature**：隐藏「文件」视图，不通过轮询或旧 RPC 模拟文件订阅。
+
 ## 测试覆盖
 
-兼容性测试位于 `tests/e2e/src/compatibility.vitest.test.ts`，共 **15 个测试用例**：
+兼容性测试位于 `tests/e2e/src/compatibility.vitest.test.ts`，共 **18 个测试用例**：
 
-### Feature Detection 测试（7 个）
+### Feature Detection 测试（8 个）
 
 - 旧 daemon 无 features 字段 → 全 false
 - null server_info → 全 false
 - 空 features 对象 → 全 false
 - v0.1.81 daemon → terminalRestoreModes true
-- v0.1.106 daemon → 两个 feature 都 true
+- v0.1.106 daemon → timeline 与 terminal feature 为 true
+- v0.2.0 daemon → `workspaceFileEditing` 为 true
 - 显式 false flag → 正确识别
 - 未知 feature → 忽略不影响
 
@@ -62,12 +72,14 @@ Dashboard 当前使用的所有 feature gates（位于 `web/src/paseo/features.t
 - 全部 features → 接受
 - null server_info → 接受（连接中的竞态）
 
-### Feature Gating 行为测试（4 个）
+### Feature Gating 行为测试（6 个）
 
 - selectiveAgentTimeline 缺失 → 不调用订阅方法
 - selectiveAgentTimeline 存在 → 启用订阅
 - terminalRestoreModes 缺失 → 不传 restore options
 - terminalRestoreModes 存在 → 传 restore options
+- workspaceFileEditing 缺失 → 隐藏文件视图
+- workspaceFileEditing 存在 → 启用文件视图
 
 ## 添加新 Feature Gate 的流程
 
@@ -142,6 +154,7 @@ Dashboard 当前使用的所有 feature gates（位于 `web/src/paseo/features.t
 
 - `COMPAT(selectiveAgentTimeline)` - `dashboardRuntime.ts:XXX` - 添加于 v0.1.106，2027-08 后可删
 - `COMPAT(terminal-restore-modes)` - `terminalSession.ts:XXX` - 添加于 v0.1.81，2027-02 后可删
+- `COMPAT(workspaceFileEditing)` - `WorkspacePage.tsx:XXX` - 添加于 v0.2.0，daemon floor 达到 v0.2.0 后可删
 
 ## 协议兼容性
 
@@ -160,10 +173,12 @@ Dashboard 遵守 Paseo 的协议兼容规则（见 `/root/workspace/code/paseo/d
 2. Dashboard 连接后检查：
    - Timeline 仍可用（daemon 广播所有事件）
    - Terminal 仍可用（daemon 发送 snapshot 帧）
-3. 升级 daemon 到 v0.1.106+
+   - Workspace 不显示「文件」视图
+3. 升级 daemon 到 v0.2.0+
 4. Dashboard 重连后检查：
    - Timeline 订阅生效（只接收选中 agent 事件）
    - Terminal restore 参数生效（不再收到 snapshot）
+   - Workspace 显示「文件」视图，文件变更能刷新内容
 
 **自动化测试**（已包含在 `test:dashboard`）：
 

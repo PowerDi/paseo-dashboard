@@ -9,8 +9,8 @@
 - **仓库**：Paseo monorepo fork — `git@github.com:PowerDi/paseo-dashboard.git`
 - **代码位置**：`/root/workspace/code/paseo/packages/dashboard/`
 - **Paseo 源码**：`/root/workspace/code/paseo/`（monorepo 根，作为行为事实来源）
-- **当前阶段**：P4.3 生产密钥管理已完成；风险登录和新设备提示继续暂缓，下一阶段是 P4.4 HostGrant 模型审查。
-- **当前分支**：`feat/dashboard-multi-user`。注册邀请策略和 abuse 防护已分别提交到 `0ac903003`、`f1082fe09`。
+- **当前阶段**：P3.7.1 文件浏览器只读基础已完成，下一阶段是 P3.7.2 Git 状态与差异查看。
+- **当前分支**：`feat/dashboard-multi-user`。当前工作聚焦 P3.7 新增功能。
 
 ## Git 协作
 
@@ -42,6 +42,15 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 | `docs/compatibility-matrix.md` | Daemon 版本兼容矩阵、feature gating 列表、添加新 gate 流程、COMPAT 标签清理                  | 添加 feature gate 或验证版本兼容性 |
 
 ## 当前状态
+
+### P3.7.1 文件浏览器只读基础（2026-08-16，已完成）
+
+- Workspace 顶部增加「文件」视图；按当前 agent 的 `cwd` 懒加载目录树并先展示目录、再展示文件。
+- `DaemonClientLike` 与 `DashboardPaseoRuntime` 接入 `listDirectory`、`readFile`、`subscribeFile`，浏览器仍直接通过 Relay E2EE 连接 daemon。
+- 文件查看器只读取文本；图片和二进制文件显示不支持提示，不开放写入、删除、重命名、上传或下载。
+- 选中文本文件后建立文件订阅；版本变更时重新读取内容，切换文件或 workspace 时解除订阅并丢弃过期请求结果。
+- 目录读取、文件读取、文件缺失、订阅失败和 daemon 错误均有内联状态；runtime 调用路径加入单测。
+- 定向测试通过：Dashboard Web 的 runtime/connection/features 三个文件共 38 个用例，兼容性测试 18 个用例；根 `typecheck`、`lint` 通过。
 
 ### 权限卡片增强（2026-08-16，已提交）
 
@@ -137,7 +146,7 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 
 ### 待开始
 
-M3、P4.1、P4.2 当前范围、P4.3 和 P4.4 已完成。Dashboard 不验证邮箱所有权；风险登录和新设备提示暂缓。
+P3.7.1、M3、P4.1、P4.2 当前范围、P4.3 和 P4.4 已完成。Dashboard 不验证邮箱所有权；风险登录和新设备提示暂缓。
 
 已搁置，不阻塞 M3：
 
@@ -145,8 +154,8 @@ M3、P4.1、P4.2 当前范围、P4.3 和 P4.4 已完成。Dashboard 不验证邮
 
 下一步：
 
-1. 开始 P3.7.1 文件浏览器只读基础：目录树、文本读取、文件变更订阅和路径/错误边界。
-2. P3.7.1 完成后进入 P3.7.2 Git 状态与差异查看；先不做 push、merge 等写操作。
+1. 开始 P3.7.2 Git 状态与差异查看：当前分支、工作区状态、diff、变更订阅和 PR 状态/时间线。
+2. P3.7.2 先保持只读，不做 commit、push、merge、discard 或 stash 等写操作。
 3. P5.1 Harmony Runtime 暂缓；P4.4 HostGrant 只保留审查结论，不启用分享语义。
 4. 风险登录、新设备提示、密码恢复和权限卡片真实 provider 手工验证继续后置。
 

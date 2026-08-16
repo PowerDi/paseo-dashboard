@@ -90,8 +90,23 @@ const en: typeof zhCN = {
       runningTool: "Running {{detail}}",
     },
     view: {
+      label: "Workspace view",
       timeline: "Timeline",
+      files: "Files",
       terminal: "Terminal",
+    },
+    files: {
+      treeAria: "Workspace files",
+      viewerAria: "File viewer",
+      loading: "Loading directory…",
+      retry: "Retry",
+      reading: "Reading file…",
+      selectFile: "Select a text file to view it.",
+      missing: "This file is no longer available.",
+      unsupported: "This {{kind}} file cannot be displayed as text.",
+      readError: "Failed to read the file: {{message}}",
+      subscribeError: "Failed to watch the file: {{message}}",
+      directoryError: "Failed to load directory: {{message}}",
     },
     terminal: {
       attaching: "Attaching to terminal…",

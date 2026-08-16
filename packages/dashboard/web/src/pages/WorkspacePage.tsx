@@ -26,6 +26,7 @@ import {
 import { PermissionRequests } from "@/components/permission-requests";
 import { TimelineView } from "@/components/timeline";
 import { WorkspaceTerminal } from "@/components/workspace-terminal";
+import { WorkspaceFileExplorer } from "@/components/workspace-file-explorer";
 import { Button } from "@/components/ui/button";
 import { useAgentTimeline } from "@/hooks/use-agent-timeline";
 import { useAutosizeTextarea } from "@/hooks/use-autosize-textarea";
@@ -84,7 +85,7 @@ export function WorkspacePage({
   const draftRef = useAutosizeTextarea(draft);
   const [sending, setSending] = useState(false);
   const [pending, setPending] = useState<"cancel" | "archive" | null>(null);
-  const [view, setView] = useState<"timeline" | "terminal">("timeline");
+  const [view, setView] = useState<"timeline" | "files" | "terminal">("timeline");
   const [providersSnapshot, setProvidersSnapshot] = useState<readonly ProviderSnapshotEntry[]>([]);
   const agentId = context?.entry.agent.id ?? null;
   const hostId = context?.host.id ?? null;
@@ -124,12 +125,14 @@ export function WorkspacePage({
     setProvidersSnapshot([]);
   }, [agentId]);
 
-  // Fetch provider models when the agent is loaded and the daemon supports config apply.
-  const supportsConfigApply = (() => {
-    if (!hostId) return false;
-    const serverInfo = dashboardRuntime.getServerInfo(hostId);
-    return getDaemonFeatures(serverInfo).agentConfigApply;
-  })();
+  const daemonFeatures = hostId ? getDaemonFeatures(dashboardRuntime.getServerInfo(hostId)) : null;
+  const supportsConfigApply = daemonFeatures?.agentConfigApply ?? false;
+  // COMPAT(workspaceFileEditing): added in v0.2.0, remove after 2027-01-18 once daemon floor >= v0.2.0.
+  const supportsWorkspaceFiles = daemonFeatures?.workspaceFileEditing ?? false;
+  const activeView = view === "files" && !supportsWorkspaceFiles ? "timeline" : view;
+  const workspaceViews = supportsWorkspaceFiles
+    ? (["timeline", "files", "terminal"] as const)
+    : (["timeline", "terminal"] as const);
 
   const availableModels = (() => {
     const providerName = context?.entry.agent.provider ?? "";
@@ -251,14 +254,14 @@ export function WorkspacePage({
           <div
             className="workspace-header-tabs"
             role="tablist"
-            aria-label={t("workspace.view.timeline")}
+            aria-label={t("workspace.view.label")}
           >
-            {(["timeline", "terminal"] as const).map((candidate) => (
+            {workspaceViews.map((candidate) => (
               <button
                 key={candidate}
                 type="button"
                 role="tab"
-                aria-selected={view === candidate}
+                aria-selected={activeView === candidate}
                 className="workspace-header-tab"
                 onClick={() => setView(candidate)}
               >
@@ -293,13 +296,21 @@ export function WorkspacePage({
         </div>
       </header>
 
-      {view === "terminal" ? (
+      {activeView === "terminal" ? (
         <div className="min-h-0 flex-1 px-8 py-5">
           <WorkspaceTerminal
             key={`${context.host.id}:${agent.cwd}:${agent.workspaceId ?? ""}`}
             hostId={context.host.id}
             cwd={agent.cwd}
             workspaceId={agent.workspaceId}
+          />
+        </div>
+      ) : activeView === "files" ? (
+        <div className="min-h-0 flex-1 px-8 py-5">
+          <WorkspaceFileExplorer
+            key={`${context.host.id}:${agent.cwd}`}
+            hostId={context.host.id}
+            cwd={agent.cwd}
           />
         </div>
       ) : (
@@ -422,7 +433,7 @@ export function WorkspacePage({
         </div>
       )}
 
-      {view === "timeline" && (
+      {activeView === "timeline" && (
         <ComposerShell
           label={t("workspace.composerAria")}
           bar={

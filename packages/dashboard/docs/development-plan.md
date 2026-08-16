@@ -401,16 +401,16 @@ M3 退出条件已满足，以下是对照 `DaemonClient` 完整 API 后发现�
 
 **执行顺序**
 
-| 子阶段 | 先交付的功能                 | 范围与边界                                                                      | 退出条件                                                           |
-| ------ | ---------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| P3.7.1 | 文件浏览器只读基础           | `listDirectory`、`readFile`、`subscribeFile`；先不开放写入、删除和上传          | 能浏览项目目录、打开文本文件、看到文件变更；路径校验和错误态有测试 |
-| P3.7.2 | Git 状态与差异               | `checkoutRefresh`、分支/状态展示、diff、`subscribeCheckoutDiff`、PR 状态/时间线 | Workspace 能查看当前分支和变更；不引入写操作确认前的 push/merge    |
-| P3.7.3 | Workspace/Project 管理       | project/workspace 新建、打开、改名、归档、置顶；脚本先只展示状态                | 侧栏树可完成基本管理，恢复和归档语义有合同测试                     |
-| P3.7.4 | Agent 高级操作               | 删除、detach、标题更新、历史/回退；高风险动作逐项确认                           | 不影响现有归档/恢复语义，危险操作有明确反馈                        |
-| P3.7.5 | Provider/Model 详情          | provider、model、mode、feature、诊断和 usage；配置写入单独评审                  | Model 配置路径有 feature gating 和调用测试                         |
-| P3.7.6 | 定时任务、扫码和 daemon 管理 | schedule、摄像头 pairing、daemon 状态/诊断；按独立页面拆分                      | 每个模块有 API contract、失败态和权限边界验证                      |
+| 子阶段         | 先交付的功能                 | 范围与边界                                                                      | 退出条件                                                           |
+| -------------- | ---------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| P3.7.1（完成） | 文件浏览器只读基础           | `listDirectory`、`readFile`、`subscribeFile`；先不开放写入、删除和上传          | 能浏览项目目录、打开文本文件、看到文件变更；路径校验和错误态有测试 |
+| P3.7.2         | Git 状态与差异               | `checkoutRefresh`、分支/状态展示、diff、`subscribeCheckoutDiff`、PR 状态/时间线 | Workspace 能查看当前分支和变更；不引入写操作确认前的 push/merge    |
+| P3.7.3         | Workspace/Project 管理       | project/workspace 新建、打开、改名、归档、置顶；脚本先只展示状态                | 侧栏树可完成基本管理，恢复和归档语义有合同测试                     |
+| P3.7.4         | Agent 高级操作               | 删除、detach、标题更新、历史/回退；高风险动作逐项确认                           | 不影响现有归档/恢复语义，危险操作有明确反馈                        |
+| P3.7.5         | Provider/Model 详情          | provider、model、mode、feature、诊断和 usage；配置写入单独评审                  | Model 配置路径有 feature gating 和调用测试                         |
+| P3.7.6         | 定时任务、扫码和 daemon 管理 | schedule、摄像头 pairing、daemon 状态/诊断；按独立页面拆分                      | 每个模块有 API contract、失败态和权限边界验证                      |
 
-P5.1 Harmony Runtime 暂缓，不改变 P4.4 的审查结论。P3.7.1 完成前不并行实现文件写入、Git push/merge 或 Host 分享。
+P5.1 Harmony Runtime 暂缓，不改变 P4.4 的审查结论。P3.7.2 继续保持只读，不并行实现文件写入、Git push/merge 或 Host 分享。
 
 **产出**
 

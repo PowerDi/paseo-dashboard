@@ -88,8 +88,23 @@ export default {
       runningTool: "正在执行 {{detail}}",
     },
     view: {
+      label: "工作区视图",
       timeline: "时间线",
+      files: "文件",
       terminal: "终端",
+    },
+    files: {
+      treeAria: "工作区文件",
+      viewerAria: "文件查看器",
+      loading: "正在加载目录…",
+      retry: "重试",
+      reading: "正在读取文件…",
+      selectFile: "选择一个文本文件查看内容。",
+      missing: "文件已不存在。",
+      unsupported: "暂不支持将此 {{kind}} 文件作为文本显示。",
+      readError: "读取文件失败：{{message}}",
+      subscribeError: "监听文件失败：{{message}}",
+      directoryError: "加载目录失败：{{message}}",
     },
     terminal: {
       attaching: "连接终端中…",

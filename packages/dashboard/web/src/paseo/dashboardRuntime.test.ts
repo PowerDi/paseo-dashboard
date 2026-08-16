@@ -9,7 +9,12 @@ import type {
   DaemonWorkspace,
 } from "../stores/daemon-data-store";
 import { DefaultPaseoConnectionManager, type DaemonClientLike } from "./connectionManager";
-import { createDashboardRuntime } from "./dashboardRuntime";
+import {
+  createDashboardRuntime,
+  type DashboardFileDirectory,
+  type DashboardFileRead,
+  type DashboardFileVersion,
+} from "./dashboardRuntime";
 
 type ProjectListResult = Awaited<ReturnType<DaemonDataClient["listProjects"]>>;
 type WorkspaceListResult = Awaited<ReturnType<DaemonDataClient["fetchWorkspaces"]>>;
@@ -221,6 +226,7 @@ class RuntimeClient implements DaemonClientLike, DaemonDataClient {
       features: {
         selectiveAgentTimeline: true,
         "terminal-restore-modes": true,
+        workspaceFileEditing: true,
       },
     };
   }
@@ -281,6 +287,37 @@ class RuntimeClient implements DaemonClientLike, DaemonDataClient {
 
   onTerminalStreamEvent(): () => void {
     return () => undefined;
+  }
+
+  async listDirectory(_cwd: string, _path: string): Promise<DashboardFileDirectory> {
+    return { path: "", entries: [] };
+  }
+
+  async readFile(_cwd: string, path: string): Promise<DashboardFileRead> {
+    return {
+      bytes: new Uint8Array(),
+      mime: "text/plain",
+      size: 0,
+      path,
+      kind: "text",
+      modifiedAt: "2026-08-13T00:00:00.000Z",
+    };
+  }
+
+  async subscribeFile(
+    input: { cwd: string; path: string },
+    _onUpdate: (version: DashboardFileVersion) => void,
+  ): Promise<{ initial: DashboardFileVersion; unsubscribe: () => void }> {
+    return {
+      initial: {
+        status: "ready",
+        cwd: input.cwd,
+        path: input.path,
+        size: 0,
+        modifiedAt: "2026-08-13T00:00:00.000Z",
+      },
+      unsubscribe: () => undefined,
+    };
   }
 
   // Property with an assertion because matching DaemonClient's `on` overload
@@ -576,6 +613,87 @@ describe("dashboard Paseo runtime", () => {
       permission,
     ]);
     expect(clients.get("host-a")?.respondToPermission).not.toHaveBeenCalled();
+  });
+
+  test("forwards read-only file explorer operations", async () => {
+    const { clients, runtime } = createRuntimeWithClients();
+    await runtime.connectHost(makeHost("host-a"));
+    const client = clients.get("host-a");
+    if (!client) throw new Error("test client was not created");
+
+    const directory = {
+      path: "src",
+      entries: [
+        {
+          name: "index.ts",
+          path: "src/index.ts",
+          kind: "file" as const,
+          size: 12,
+          modifiedAt: "2026-08-13T00:00:00.000Z",
+        },
+      ],
+    };
+    const file = {
+      bytes: new TextEncoder().encode("export {}"),
+      mime: "text/typescript",
+      size: 9,
+      path: "src/index.ts",
+      kind: "text" as const,
+      modifiedAt: "2026-08-13T00:00:00.000Z",
+    };
+    const initial = {
+      status: "ready" as const,
+      cwd: "/projects/host-a",
+      path: "src/index.ts",
+      size: 9,
+      modifiedAt: "2026-08-13T00:00:00.000Z",
+      revision: "rev-1",
+    };
+    const unsubscribe = vi.fn();
+    const listDirectory = vi.spyOn(client, "listDirectory").mockResolvedValue(directory);
+    const readFile = vi.spyOn(client, "readFile").mockResolvedValue(file);
+    const subscribeFile = vi
+      .spyOn(client, "subscribeFile")
+      .mockResolvedValue({ initial, unsubscribe });
+    const onUpdate = vi.fn();
+
+    await expect(runtime.listDirectory("host-a", "/projects/host-a", "src")).resolves.toEqual(
+      directory,
+    );
+    await expect(runtime.readFile("host-a", "/projects/host-a", "src/index.ts")).resolves.toEqual(
+      file,
+    );
+    await expect(
+      runtime.subscribeFile("host-a", { cwd: "/projects/host-a", path: "src/index.ts" }, onUpdate),
+    ).resolves.toEqual({ initial, unsubscribe });
+
+    expect(listDirectory).toHaveBeenCalledWith("/projects/host-a", "src");
+    expect(readFile).toHaveBeenCalledWith("/projects/host-a", "src/index.ts");
+    expect(subscribeFile).toHaveBeenCalledWith(
+      { cwd: "/projects/host-a", path: "src/index.ts" },
+      onUpdate,
+    );
+  });
+
+  test("preserves file explorer daemon errors", async () => {
+    const { clients, runtime } = createRuntimeWithClients();
+    await runtime.connectHost(makeHost("host-a"));
+    const client = clients.get("host-a");
+    if (!client) throw new Error("test client was not created");
+
+    vi.spyOn(client, "listDirectory").mockRejectedValue(new Error("path outside workspace"));
+    vi.spyOn(client, "readFile").mockRejectedValue(new Error("file unavailable"));
+    vi.spyOn(client, "subscribeFile").mockRejectedValue(new Error("watch unavailable"));
+
+    await expect(runtime.listDirectory("host-a", "/projects/host-a", "../secret")).rejects.toThrow(
+      "path outside workspace",
+    );
+    await expect(runtime.readFile("host-a", "/projects/host-a", "missing.ts")).rejects.toThrow(
+      "file unavailable",
+    );
+    await expect(
+      runtime.subscribeFile("host-a", { cwd: "/projects/host-a", path: "missing.ts" }, vi.fn()),
+    ).rejects.toThrow("watch unavailable");
   });
 
   test("viewAgent subscribes the selective stream and loads the timeline tail", async () => {

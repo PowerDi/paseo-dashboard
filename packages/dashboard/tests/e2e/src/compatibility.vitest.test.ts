@@ -13,6 +13,7 @@ import type { ServerInfoStatusPayload } from "@getpaseo/protocol/messages";
  * - v0.1.80 and earlier: no features field
  * - v0.1.81+: terminal-restore-modes feature
  * - v0.1.106+: selectiveAgentTimeline feature
+ * - v0.2.0+: workspaceFileEditing feature
  */
 
 describe("Daemon version compatibility", () => {
@@ -30,6 +31,7 @@ describe("Daemon version compatibility", () => {
 
       expect(features.selectiveAgentTimeline).toBe(false);
       expect(features.terminalRestoreModes).toBe(false);
+      expect(features.workspaceFileEditing).toBe(false);
     });
 
     it("returns all false for null server_info", () => {
@@ -37,6 +39,7 @@ describe("Daemon version compatibility", () => {
 
       expect(features.selectiveAgentTimeline).toBe(false);
       expect(features.terminalRestoreModes).toBe(false);
+      expect(features.workspaceFileEditing).toBe(false);
     });
 
     it("returns all false for empty features object", () => {
@@ -52,6 +55,7 @@ describe("Daemon version compatibility", () => {
 
       expect(features.selectiveAgentTimeline).toBe(false);
       expect(features.terminalRestoreModes).toBe(false);
+      expect(features.workspaceFileEditing).toBe(false);
     });
 
     it("detects terminal-restore-modes for v0.1.81+ daemon", () => {
@@ -89,6 +93,24 @@ describe("Daemon version compatibility", () => {
       expect(features.selectiveAgentTimeline).toBe(true);
     });
 
+    it("detects workspaceFileEditing for v0.2.0+ daemon", () => {
+      const serverInfo: ServerInfoStatusPayload = {
+        status: "server_info",
+        serverId: "test-server",
+        version: "0.2.0",
+        hostname: "test-host",
+        features: {
+          workspaceFileEditing: true,
+        },
+      };
+
+      const features = getDaemonFeatures(serverInfo);
+
+      expect(features.workspaceFileEditing).toBe(true);
+      expect(features.terminalRestoreModes).toBe(false);
+      expect(features.selectiveAgentTimeline).toBe(false);
+    });
+
     it("handles explicitly false feature flags", () => {
       const serverInfo: ServerInfoStatusPayload = {
         status: "server_info",
@@ -98,6 +120,7 @@ describe("Daemon version compatibility", () => {
         features: {
           "terminal-restore-modes": false,
           selectiveAgentTimeline: false,
+          workspaceFileEditing: false,
         },
       };
 
@@ -105,6 +128,7 @@ describe("Daemon version compatibility", () => {
 
       expect(features.terminalRestoreModes).toBe(false);
       expect(features.selectiveAgentTimeline).toBe(false);
+      expect(features.workspaceFileEditing).toBe(false);
     });
 
     it("ignores unknown feature flags", () => {
@@ -161,11 +185,12 @@ describe("Daemon version compatibility", () => {
       const serverInfo: ServerInfoStatusPayload = {
         status: "server_info",
         serverId: "test-server",
-        version: "0.1.106",
+        version: "0.2.0",
         hostname: "test-host",
         features: {
           "terminal-restore-modes": true,
           selectiveAgentTimeline: true,
+          workspaceFileEditing: true,
         },
       };
 
@@ -210,6 +235,31 @@ describe("Feature gating behavior", () => {
       const features = getDaemonFeatures(newDaemonInfo);
 
       expect(features.selectiveAgentTimeline).toBe(true);
+    });
+  });
+
+  describe("workspaceFileEditing gating", () => {
+    it("hides the file view when feature is missing", () => {
+      const oldDaemonInfo: ServerInfoStatusPayload = {
+        status: "server_info",
+        serverId: "test-server",
+        version: "0.1.106",
+        hostname: "test-host",
+      };
+
+      expect(getDaemonFeatures(oldDaemonInfo).workspaceFileEditing).toBe(false);
+    });
+
+    it("enables the file view when feature is present", () => {
+      const newDaemonInfo: ServerInfoStatusPayload = {
+        status: "server_info",
+        serverId: "test-server",
+        version: "0.2.0",
+        hostname: "test-host",
+        features: { workspaceFileEditing: true },
+      };
+
+      expect(getDaemonFeatures(newDaemonInfo).workspaceFileEditing).toBe(true);
     });
   });
 

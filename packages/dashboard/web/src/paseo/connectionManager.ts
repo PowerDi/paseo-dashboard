@@ -36,6 +36,9 @@ export type DaemonClientLike = Pick<
   | "unsubscribeTerminal"
   | "sendTerminalInput"
   | "onTerminalStreamEvent"
+  | "listDirectory"
+  | "readFile"
+  | "subscribeFile"
 >;
 export type DaemonClientFactory = (config: DaemonClientConfig) => DaemonClientLike;
 export type PaseoConnectionListener = (state: HostConnectionState) => void;

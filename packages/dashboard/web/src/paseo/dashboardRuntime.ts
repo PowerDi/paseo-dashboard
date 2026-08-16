@@ -36,6 +36,11 @@ export interface DashboardTerminalInfo {
   title?: string;
 }
 
+export type DashboardFileDirectory = Awaited<ReturnType<DaemonClientLike["listDirectory"]>>;
+export type DashboardFileEntry = DashboardFileDirectory["entries"][number];
+export type DashboardFileRead = Awaited<ReturnType<DaemonClientLike["readFile"]>>;
+export type DashboardFileVersion = Parameters<Parameters<DaemonClientLike["subscribeFile"]>[1]>[0];
+
 export interface DashboardHostRuntimeState {
   connection: HostConnectionState;
   daemonData: DaemonHostDataState | null;
@@ -86,6 +91,13 @@ export interface DashboardPaseoRuntime {
     cwd: string,
     workspaceId?: string,
   ): Promise<DashboardTerminalInfo[]>;
+  listDirectory(hostId: string, cwd: string, path: string): Promise<DashboardFileDirectory>;
+  readFile(hostId: string, cwd: string, path: string): Promise<DashboardFileRead>;
+  subscribeFile(
+    hostId: string,
+    input: { cwd: string; path: string },
+    onUpdate: (version: DashboardFileVersion) => void,
+  ): Promise<{ initial: DashboardFileVersion; unsubscribe: () => void }>;
   createTerminal(
     hostId: string,
     cwd: string,
@@ -373,6 +385,18 @@ export function createDashboardRuntime(
     async listTerminals(hostId, cwd, workspaceId) {
       const payload = await requireClient(hostId).listTerminals(cwd, undefined, { workspaceId });
       return payload.terminals;
+    },
+
+    async listDirectory(hostId, cwd, path) {
+      return requireClient(hostId).listDirectory(cwd, path);
+    },
+
+    async readFile(hostId, cwd, path) {
+      return requireClient(hostId).readFile(cwd, path);
+    },
+
+    async subscribeFile(hostId, input, onUpdate) {
+      return requireClient(hostId).subscribeFile(input, onUpdate);
     },
 
     async createTerminal(hostId, cwd, options) {

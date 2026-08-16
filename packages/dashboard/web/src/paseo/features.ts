@@ -31,6 +31,13 @@ export interface DaemonFeatures {
    * agent.config.apply RPC. Added in v0.3.2.
    */
   agentConfigApply: boolean;
+
+  /**
+   * Workspace file editing: daemon supports file version subscriptions and
+   * mutation RPCs. Dashboard currently uses the subscription portion for its
+   * read-only file viewer. Added in v0.2.0.
+   */
+  workspaceFileEditing: boolean;
 }
 
 /**
@@ -43,6 +50,7 @@ export function getDaemonFeatures(serverInfo: ServerInfoStatusPayload | null): D
     selectiveAgentTimeline: features.selectiveAgentTimeline === true,
     terminalRestoreModes: features["terminal-restore-modes"] === true,
     agentConfigApply: features.agentConfigApply === true,
+    workspaceFileEditing: features.workspaceFileEditing === true,
   };
 }
 

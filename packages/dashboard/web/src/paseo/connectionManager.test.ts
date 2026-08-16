@@ -131,6 +131,18 @@ class FakeClient implements DaemonClientLike {
     return () => undefined;
   }
 
+  listDirectory(): never {
+    throw new Error("not implemented in fake");
+  }
+
+  readFile(): never {
+    throw new Error("not implemented in fake");
+  }
+
+  subscribeFile(): never {
+    throw new Error("not implemented in fake");
+  }
+
   emit(state: ConnectionState): void {
     this.state = state;
     for (const listener of this.listeners) listener(state);
