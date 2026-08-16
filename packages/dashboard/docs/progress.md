@@ -145,10 +145,10 @@ M3、P4.1、P4.2 当前范围、P4.3 和 P4.4 已完成。Dashboard 不验证邮
 
 下一步：
 
-1. 进入 P5.1，验证 Harmony 的 WebSocket binary frame、ArrayBuffer、安全随机数、文本编码和 `tweetnacl` 运行环境。
-2. 风险登录和新设备提示继续暂缓；需要恢复时直接从现有 `newDevice` 与登录环境审计事实接 UI。
-3. 密码恢复按未来本地管理员 recovery code/CLI 单独设计，不引入邮件服务。
-4. 权限卡片真实 provider 手工验证继续后置，不阻塞 P5。
+1. 开始 P3.7.1 文件浏览器只读基础：目录树、文本读取、文件变更订阅和路径/错误边界。
+2. P3.7.1 完成后进入 P3.7.2 Git 状态与差异查看；先不做 push、merge 等写操作。
+3. P5.1 Harmony Runtime 暂缓；P4.4 HostGrant 只保留审查结论，不启用分享语义。
+4. 风险登录、新设备提示、密码恢复和权限卡片真实 provider 手工验证继续后置。
 
 完整序列见 `docs/development-plan.md`（P4 多用户与设备安全 / P5 Harmony / P6 可选高级能力）。
 
@@ -342,3 +342,4 @@ npm run typecheck:dashboard
 | 2026-08-16 | Codex            | P4.2 当前范围完成：device/session 增加截断 IP、User-Agent 摘要和认证方式；Web 增加 discoverable Passkey 注册、登录、列表和删除；challenge 哈希化、五分钟、单次消费并校验 RP/origin/UV/counter，credential 与 ceremony 有独立 abuse bucket。新增 6 个合同测试和 2 个 Web 单测，contract 106→112、web 128→130、静态总数 257→265。风险登录与新设备提示按用户决定暂缓，下一阶段 P4.3。                                                                                                                                                       |
 | 2026-08-16 | Codex            | P4.3 完成：版本化 KeyProvider 支持 file 与 AWS KMS data key；新增 key registry、加密 fingerprint secret、admin 状态/轮换 API、当前密码校验、IP 限流、日志脱敏和审计。轮换先切 active，再在线重包 encryptedDek，支持中断后从 decrypt-only 继续，完成后退休旧 key。新增 6 个合同测试，contract 112→118、静态总数 265→271；部署文档补 file/KMS 轮换和隔离恢复演练。                                                                                                                                                                         |
 | 2026-08-16 | Codex            | P4.4 完成：完成 HostGrant 逻辑模型和授权边界审查；owner 继续由 hosts.ownerUserId 定义，active grant 按 Host/用户唯一，撤销保留历史；admin 不自动获得 capability，operator/viewer 等待 daemon per-client scope、credential 和 revoke 支持。未新增 grant 表、API 或 UI。                                                                                                                                                                                                                                                                   |
+| 2026-08-16 | Codex            | 开发优先级调整：暂缓 P5.1 Harmony Runtime，回到 P3.7 新增功能；先实施 P3.7.1 文件浏览器只读基础，再做 Git 状态/差异查看，暂不并行开放文件写入或 Git push/merge。                                                                                                                                                                                                                                                                                                                                                                         |

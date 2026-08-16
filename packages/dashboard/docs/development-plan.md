@@ -383,6 +383,45 @@
 
 - 每项都有 Web 端调用路径的测试；改名冲突走 409 分支；断开 SSE 后配置更新能自动恢复且不重复消费事件。
 
+### P3.7 新增功能（当前优先级）
+
+M3 退出条件已满足，以下是对照 `DaemonClient` 完整 API 后发现的 UI 层缺口。各项优先级由用户按实际情况决定。
+
+**任务**
+
+1. **文件浏览器**：`listDirectory`、`readFile`、`writeFile`、`createFileEntry`、`renameFileEntry`、`duplicateFileEntry`、`deleteFileEntry`、`uploadFile`、`requestDownloadToken`、`subscribeFile`。用户无法从 Dashboard 查看 agent 正在修改的文件。
+2. **Git 操作**：`checkoutRefresh`、`checkoutPull`、`checkoutPush`、`checkoutCommit`、`checkoutMerge`、`checkoutMergeFromBase`、`checkoutSwitchBranch`、`checkoutPrCreate`、`checkoutPrMerge`、`checkoutForgeSetAutoMerge`、`checkoutGithubSetAutoMerge`、`checkoutPrStatus`、`pullRequestTimeline`、`checkoutDiscardChanges`、`stashSave`、`stashPop`、`stashList`、`validateBranch`、`getBranchSuggestions`、`subscribeCheckoutDiff`、`unsubscribeCheckoutDiff`、`searchForge`、`searchGitHub`、`renameBranch`。WorkspacePage 只展示 `currentBranch`，不能操作。
+3. **Workspace/Project 管理**：`createWorkspace`、`createPaseoWorktree`、`archivePaseoWorktree`、`getPaseoWorktreeList`、`archiveWorkspace`、`inspectWorkspaceRecovery`、`restoreWorkspace`、`setWorkspaceTitle`、`setWorkspacePinned`、`renameProject`、`setProjectIcon`、`removeProject`、`addProject`、`openProject`、`createProjectDirectory`、`cloneGithubProject`、`searchGithubRepositories`、`startWorkspaceScript`、`stopWorkspaceScript`、`listWorkspaceScripts`。侧栏树展示 project/workspace 列表但不能增删改。
+4. **Agent 高级操作**：`deleteAgent`（彻底删除，非归档）、`detachAgent`、`updateAgent`（更新标题等元数据）、`importAgent`、`rewindAgent`（回退到某条消息，conversation/files/both）、`fetchAgentHistory`、`fetchRecentProviderSessions`、`listCommands`。
+5. **Provider/Model 详情**：`listProviderModels`、`listProviderModes`、`listProviderFeatures`、`listAvailableProviders`、`refreshProvidersSnapshot`、`getProviderDiagnostic`、`listProviderUsage`、`getDaemonConfig`、`patchDaemonConfig`、`readProjectConfig`、`writeProjectConfig`。当前只有 `getProvidersSnapshot` + `applyAgentConfig` model 切换。
+6. **定时任务**：`scheduleCreate`、`scheduleUpdate`、`scheduleDelete`、`scheduleList`、`scheduleInspect`、`schedulePause`、`scheduleResume`、`scheduleRunOnce`、`scheduleLogs`。完全无 UI。
+7. **扫码导入**：`product-requirements.md` 要求浏览器支持摄像头扫码读取 pairing offer，不支持时回退粘贴。当前 `ImportHostModal` 只支持粘贴文本。
+8. **Daemon 管理**：`getDaemonStatus`、`getDaemonPairingOffer`、`collectDiagnostics`、`connectHub`、`getHubStatus`、`disconnectHub`。
+9. **其他**：`captureTerminal`（终端截图）、`closeItems`（批量关闭 tab）、`clearAgentAttention`、`clearWorkspaceAttention`、`sendHeartbeat`、`measureLatency`、`ping`、`registerPushToken`、`unregisterPushToken`。多 agent 同时查看（当前只能看一个）。
+
+**执行顺序**
+
+| 子阶段 | 先交付的功能                 | 范围与边界                                                                      | 退出条件                                                           |
+| ------ | ---------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| P3.7.1 | 文件浏览器只读基础           | `listDirectory`、`readFile`、`subscribeFile`；先不开放写入、删除和上传          | 能浏览项目目录、打开文本文件、看到文件变更；路径校验和错误态有测试 |
+| P3.7.2 | Git 状态与差异               | `checkoutRefresh`、分支/状态展示、diff、`subscribeCheckoutDiff`、PR 状态/时间线 | Workspace 能查看当前分支和变更；不引入写操作确认前的 push/merge    |
+| P3.7.3 | Workspace/Project 管理       | project/workspace 新建、打开、改名、归档、置顶；脚本先只展示状态                | 侧栏树可完成基本管理，恢复和归档语义有合同测试                     |
+| P3.7.4 | Agent 高级操作               | 删除、detach、标题更新、历史/回退；高风险动作逐项确认                           | 不影响现有归档/恢复语义，危险操作有明确反馈                        |
+| P3.7.5 | Provider/Model 详情          | provider、model、mode、feature、诊断和 usage；配置写入单独评审                  | Model 配置路径有 feature gating 和调用测试                         |
+| P3.7.6 | 定时任务、扫码和 daemon 管理 | schedule、摄像头 pairing、daemon 状态/诊断；按独立页面拆分                      | 每个模块有 API contract、失败态和权限边界验证                      |
+
+P5.1 Harmony Runtime 暂缓，不改变 P4.4 的审查结论。P3.7.1 完成前不并行实现文件写入、Git push/merge 或 Host 分享。
+
+**产出**
+
+- 各功能模块的页面、组件和 runtime 方法；每个新增 RPC 调用经过 `DaemonClientLike` Pick 扩展。
+
+**验证**
+
+- 每个子阶段都有 `DaemonClientLike` 调用路径测试、失败态测试和 feature gating；feature gating 按 `docs/compatibility-matrix.md` 流程添加。
+- 文件、Git 和 pairing 数据不进入普通日志、APM body capture 或错误消息；写操作使用显式确认和可恢复错误。
+- Web 完成真实浏览器验证后，再评估 native/Harmony 是否需要独立适配。
+
 ## P4：多用户与设备安全（M4）
 
 > 对应 `roadmap.md` M4。目标：租户隔离、key rotation、注册/登录防御。
@@ -553,6 +592,8 @@ P3.1 Connection Manager ──▶ P3.2 Agent 面板 ──▶ P3.3 Timeline/Term
    │                                                                                      ▲
    └─ P3.1 任务 3（features gating）───────────────────────────────────────────────────────┘
 P3.6 历史 Web 缺口（M1/M2 遗留，不阻塞 P3.2-P3.5，M3 退出前补齐）
+   │
+P3.7 功能缺口（M3 退出后识别，按实际优先级开发）
    │
 P4.1 多用户 ──▶ P4.2 强认证 ──▶ P4.3 密钥管理 ──▶ P4.4 Grant 审查
    │
