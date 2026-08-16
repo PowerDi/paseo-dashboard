@@ -93,6 +93,13 @@ class FakeClient implements DaemonClientLike {
   }
 
   async respondToPermission(): Promise<void> {}
+  async respondToPermissionAndWait(): Promise<{
+    agentId: string;
+    requestId: string;
+    resolution: { behavior: "allow" };
+  }> {
+    return { agentId: "", requestId: "", resolution: { behavior: "allow" } };
+  }
   async applyAgentConfig(): Promise<null> {
     return null;
   }

@@ -9,8 +9,8 @@
 - **仓库**：Paseo monorepo fork — `git@github.com:PowerDi/paseo-dashboard.git`
 - **代码位置**：`/root/workspace/code/paseo/packages/dashboard/`
 - **Paseo 源码**：`/root/workspace/code/paseo/`（monorepo 根，作为行为事实来源）
-- **当前阶段**：M3 收尾。P3.1-P3.6 全部完成，剩余项见 `待开始`。
-- **当前分支**：`feat/dashboard-migration`，最新 commit `d434c283d`（新建会话入口 + 项目栏新建图标 + 已有会话切换 model）。工作区有一批未提交改动：Agent 列表订阅、乐观消息对账、活动指示器、亮色主题。
+- **当前阶段**：M3 已完成。下一阶段从 P4.1 多用户开始。
+- **当前分支**：`feat/dashboard-migration`，最新提交为 `feat(dashboard): complete permission request cards`。工作区干净。
 
 ## Git 协作
 
@@ -43,7 +43,23 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 
 ## 当前状态
 
+### 权限卡片增强（2026-08-16，未提交）
+
+- question 权限不再退化成允许/拒绝按钮：按 provider 的 `input.questions` 渲染单选、多选、自由输入和可选回答，提交 `updatedInput.answers`。
+- plan、shell、edit 与其他 tool detail 在决策前展示；Claude `suggestions` 变成独立的「允许并记住」，不会随普通允许自动应用。
+- provider `actions` 保留 action id、behavior、variant 与顺序；请求中的主按钮、危险按钮和次级按钮不在 Dashboard 重新发明。
+- runtime 从 fire-and-forget `respondToPermission` 改为 `respondToPermissionAndWait`。daemon 拒绝或请求过期时卡片保留并显示内联错误；收到 `agent_permission_resolved` 后才本地移除。
+- 新增 `permission-request-form.test.ts` 8 个用例，`dashboardRuntime` 新增失败保留请求用例。Playwright QA fixture 用 Codex plan、Claude shell + suggestions、question 三种真实协议形状完成深色/亮色截图和问题提交验证；没有把 fixture 留在仓库。
+
+### 亮色主题视觉验证（2026-08-16）
+
+- Playwright 临时 fixture 同屏渲染 TypeScript code block、diff 和真实 xterm `TerminalView`，分别截取深色/亮色主题。
+- 两个主题均无 page error；代码语法色、diff 增删与 hunk、terminal 前景/背景/ANSI 色对比正常。
+- 截图保存在 `/tmp/dashboard-theme-qa-dark.png` 和 `/tmp/dashboard-theme-qa-light.png`，fixture 已删除，不进入仓库。
+
 ### 工作区未提交改动（2026-08-15）
+
+历史性条目。`dfd41caec`（refine timeline and theme）与 `160b7bd1b`（URL routing + incremental timeline reducer）已分别提交，下列四项已全部落地：
 
 - **Agent 列表实时订阅**：`daemon-data-store.refreshAgents` 首页请求带 `subscribe: { subscriptionId: "dashboard:<hostId>" }`，daemon 在 Session 里记下订阅后用 `agent_update` 推后续变化。之前只在首连、重连和主动建 Agent 时刷新，别处新建的会话不会出现在侧栏。订阅只在第一页建立，翻页请求不带 subscribe，否则会重置订阅。
 - **乐观消息与 canonical 对账**：runtime 发消息时生成 `messageId`，先写进 `timeline-store.submissions` 再发 RPC；daemon 把它当 `user_message.clientMessageId` 回来，`reconcileSubmissions` 按 ID 移除对应乐观条目，RPC 失败走 `rejectSubmission` 只回滚这一条。不按文本匹配（连发同样内容会错配），不靠 agent `running` 状态清理（状态与 timeline 不同帧到达，会闪空）。canonical 与乐观气泡用同一个 `submission:<id>` React key。
@@ -100,14 +116,15 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 
 ### 待开始
 
-M3 退出前剩余：
+M3 已完成。P3.1-P3.6、权限卡片增强、亮色主题视觉验证和收尾提交全部落地。
 
-1. **提交并推送工作区改动**：上面「工作区未提交改动」四项，提交前跑 `test:dashboard` + `typecheck:dashboard`。亮色主题还需要 Playwright 双主题截图（尤其代码块、diff、terminal）。
-2. **权限卡片实测**：codex 在当前模式自动放行，真实审批弹出流程没复现过；响应链路只有单测覆盖。需要换一个带审批模式的 provider 实测一次。
+已搁置，不阻塞 M3：
 
-M3 之后（不阻塞退出）：
+- **权限卡片真实 provider 实测**：协议形状、交互和 daemon resolved/error 已由单测与 Playwright QA fixture 覆盖。真实审批 provider 的 daemon 端到端手工验证按 2026-08-16 决定后置。
 
-3. 完整序列见 `docs/development-plan.md`。
+下一步：
+
+1. 进入 P4.1 多用户。先做租户隔离测试矩阵和注册/邀请策略，再实现邮箱验证与管理员策略。完整序列见 `docs/development-plan.md`（P4 多用户与设备安全 / P5 Harmony / P6 可选高级能力）。
 
 Dashboard 测试不进 CI，本地用 `test:dashboard` 跑。
 
@@ -223,7 +240,7 @@ npm run typecheck:dashboard
 - SSE 长连接会让 Playwright 的 `waitUntil: "networkidle"` 永远超时，登录后一律用 `domcontentloaded`。
 - 实时数据：`dashboardRuntime` 连接后通过 `client.on("agent_update"/"workspace_update"/"project.update")` 把推送写进 `daemon-data-store` 的 apply reducer；重连时 `refreshHost` 兜底。测试里 mock `DaemonClient["on"]` 重载集很难精确实现（`DaemonEventHandler` 变体的事件 union 与 `SessionOutboundMessage` 不同），fake 用属性 + `as DaemonClientLike["on"]` 断言。
 - Timeline：live `agent_stream` 里带 `epoch`+`seq` 的 timeline 行由 `timeline-store.applyStreamEvent` 增量应用（assistant/reasoning 相邻 chunk 拼接，tool lifecycle 按 `callId` 原地更新）。**seq 只能连续推进**：`seq <= maxSeq` 丢弃，`seq > maxSeq + 1` 说明漏了行，只能回到权威 tail 重拉，不要凭 delta 猜中间内容。没有 `seq`/`epoch` 的事件（turn*\*、permission*\*）不动 timeline。tail 页合并仍用页首 `seqStart` 切割（同 epoch 且重叠/相邻时保留更早历史，daemon 投影替换重叠后缀）。语义依据见 Paseo `docs/timeline-sync.md`。`sourceSeqRanges` 字段是 `startSeq/endSeq`。
-- **权限不是 timeline 条目**：`AgentTimelineItem` 的 union 只有 7 种（user_message / assistant_message / reasoning / tool_call / todo / error / compaction），`components/timeline.tsx` 全部渲染了，覆盖完整。权限走两条独立通道：agent 快照的 `pendingPermissions` 数组，和 `agent_stream` 的 `permission_requested`/`permission_resolved` 事件（在 `timeline-store` 的 `REFRESH_EVENT_TYPES` 里只用来触发 tail 重拉）。做 P3.4 时不要去扩 timeline item 类型。
+- **权限不是 timeline 条目**：`AgentTimelineItem` 的 union 只有 7 种（user_message / assistant_message / reasoning / tool_call / todo / error / compaction），`components/timeline.tsx` 全部渲染了，覆盖完整。权限走两条独立通道：agent 快照的 `pendingPermissions` 数组，和 `agent_stream` 的 `permission_requested`/`permission_resolved` 事件（在 `timeline-store` 的 `REFRESH_EVENT_TYPES` 里只用来触发 tail 重拉）。卡片按 request kind 处理：question 写 `updatedInput.answers`，plan/tool 展示决策上下文，permission suggestions 只能由显式「允许并记住」发送。响应必须等 `respondToPermissionAndWait` 收到 `agent_permission_resolved` 后再移除；不要去扩 timeline item 类型。
 - `DaemonClientLike` 是 `Pick<DaemonClient, ...>`（`paseo/connectionManager.ts:13`）。加新 daemon 能力先往这个 Pick 里加名字，不要在页面里绕过 connection manager 直接摸 `DaemonClient`。
 - **Terminal**：`paseo/terminalSession.ts` 是唯一的终端流处理层——订阅 `onTerminalStreamEvent`（按 terminalId 过滤 output/restore/snapshot）、`terminal_stream_exit`、resize intent（attach 时 claim、之后 update，语义见 Paseo `docs/terminal-performance.md`）。restore 模式经 `features["terminal-restore-modes"]` gate（COMPAT 注释在代码里）；无 feature 的旧 daemon 会送 snapshot 帧，`terminal-view.tsx` 用 `renderTerminalSnapshotToAnsi`（`@getpaseo/protocol/terminal-snapshot`）reset+重放进 xterm。xterm 的 `fontFamily` 不解析 CSS 变量，要写完整字体栈。终端是 per-cwd 的（`listTerminals(cwd, …, { workspaceId })`），Workspace 页用 `agent.cwd`/`agent.workspaceId`。
 
@@ -233,8 +250,8 @@ npm run typecheck:dashboard
 
 ### 测试统计
 
-- web 单测 **112**（14 文件：dashboardRuntime 17、timeline-store 13、daemon-data-store 13、features 10、agent-tree 10、app-store 8、terminalSession 8、connectionManager 7、live-activity 7、dashboardEvents 6、format-time 4、diff-lines 4、code-language 3、dashboardApi 2）。2026-08-15 实跑 14 文件 112 通过。
-- contract **79**（server-auth 16、server-security 14、server-events 14、server-hosts 13、server-sync 8、server-devices-sessions 9、auth 2、host-sync 3）+ e2e vitest **23**（connection-manager 4、offer-parser 3、compatibility 15、placeholder 1）= 静态统计 **214** 含 web。
+- web 单测 **128**（16 文件：dashboardRuntime 18、timeline-store 15、daemon-data-store 13、features 10、agent-tree 10、permission-request-form 8、app-store 8、terminalSession 8、connectionManager 7、live-activity 7、dashboardEvents 6、routes 5、format-time 4、diff-lines 4、code-language 3、dashboardApi 2）。
+- contract **79**（server-auth 16、server-security 14、server-events 14、server-hosts 13、server-devices-sessions 9、server-sync 8、auth 2、host-sync 3）+ e2e vitest **23**（connection-manager 4、offer-parser 3、compatibility 15、placeholder 1）= 静态统计 **230** 含 web。
 - Playwright 浏览器 E2E 3 测试（需 `PLAYWRIGHT_BROWSERS_PATH=/tmp/playwright-browsers`）。
 - **web 单测**：`packages/dashboard/web/package.json` 有 `test` 脚本，走该包自己的 `vite.config.ts`（`@` 指向 `web/src`）。根 `vitest.config.ts` 仍把 `@` 指到 `packages/app/src`，所以从仓库根直接 `npx vitest run packages/dashboard/web/src` 会错；用 `npm run test --workspace=@getpaseo/dashboard-web`。`test:dashboard` 现已包含 web。P3.5 兼容性测试 15 单测在 `tests/e2e/src/compatibility.vitest.test.ts`。
 - **CI 不跑 dashboard 测试，这是有意的**：`.github/workflows/ci.yml` 的测试 job 点名指定包，不要往里加 dashboard。dashboard 测试在本地跑 `test:dashboard`。根 `npm run typecheck`/`lint`/`format:check` 是 `--workspaces`，这三项会覆盖到 dashboard。
@@ -285,3 +302,8 @@ npm run typecheck:dashboard
 | 2026-08-14 | Fable            | P3.1 完成：集中 feature gating 模块 `paseo/features.ts`（`getDaemonFeatures`/`isCompatibleDaemon` + 10 单测）；`selectiveAgentTimeline` 在 `viewAgent`/`leaveAgent` 中 gate（COMPAT 标签）；`terminalRestoreModes` 改用统一模块；dashboardRuntime 测试补 `getLastServerInfoMessage` 返回完整 server_info。web 单测 94→104，test:dashboard 全绿（web 104 + contract 79 + e2e 8 = 191）；typecheck/lint/format 通过。P3.1 退出条件满足。                                                                                                   |
 | 2026-08-15 | Fable            | Agent 列表实时订阅（`fetch_agents.subscribe` 只在首页建立）；发送消息乐观气泡 + 稳定 `clientMessageId` 对账（不按文本匹配、不靠 `running` 状态清理）；活动指示器去文案留计时并修复 daemon 时钟超前导致恒为 0s；亮色主题 + 主题切换（`theme-store` 持久化、代码块/滚动条/选区/xterm 配色 token 化）。web 单测 104→112；typecheck/lint/format 通过。progress.md 与 ui.md 同步。按用户决定，dashboard 测试不进 CI，从待办中移除。                                                                                                           |
 | 2026-08-15 | Claude           | P3 路由与 Timeline 增量同步：页面 URL 与 `/agent/:hostId/:agentId` 深链成为唯一选择来源；带 `epoch` + `seq` 的 live timeline 行在前端按 daemon projection 规则增量合并，seq gap 才权威重拉 tail。Dashboard 完整测试通过：web 119、contract 79、e2e 23，共 221 项。                                                                                                                                                                                                                                                                       |
+| 2026-08-16 | Claude           | progress.md 与 reality 对齐：工作区已干净（`dfd41caec` + `160b7bd1b` 已提交，原先记成未提交的四项落地）；当前 commit 标为 `160b7bd1b`；测试统计从 web 112/214 修订为 web 119/221（timeline-store 13→15、新增 routes 5）；`待开始` 去掉已完成的「提交推送」，保留权限卡片实测与亮色 Playwright 截图；development-plan.md P3.5「未开始」改为「已完成」。                                                                                                                                                                                   |
+| 2026-08-16 | Codex            | 权限卡片增强：question 表单支持单选/多选/自由输入/可选空回答，plan 与 tool detail 展示审批上下文，Claude suggestions 提供显式「允许并记住」；runtime 改用 `respondToPermissionAndWait`，失败保留卡片并显示内联错误。新增 9 个 web 单测（web 119→128，静态总数 221→230）；Playwright QA fixture 以三种真实协议形状完成深色/亮色截图和问题提交验证。真实 provider 端到端审批仍在待办，按用户决定后置、不阻塞 M3。                                                                                                                          |
+| 2026-08-16 | Codex            | 用户决定搁置权限卡片真实 provider 手工验证，不再阻塞 M3。M3 只剩亮色主题代码块/diff/terminal 截图与提交当前收尾改动；之后进入 P4.1，先建立租户隔离测试矩阵和注册/邀请策略。                                                                                                                                                                                                                                                                                                                                                              |
+| 2026-08-16 | Codex            | 完成亮色主题视觉验证：Playwright 临时 fixture 同屏检查 TypeScript code block、diff 与真实 xterm TerminalView；深色/亮色截图均无 page error，语法色、diff 增删/hunk 和 terminal ANSI 色对比正常。fixture 已删除，M3 只剩提交当前收尾改动。                                                                                                                                                                                                                                                                                                |
+| 2026-08-16 | Codex            | M3 收尾提交完成：`feat(dashboard): complete permission request cards`。P3.1-P3.6、权限卡片增强与亮色主题视觉验证全部落地；下一阶段切到 P4.1 多用户。                                                                                                                                                                                                                                                                                                                                                                                     |

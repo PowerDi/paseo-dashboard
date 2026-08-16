@@ -99,6 +99,16 @@ daemon 只报 `running` / `idle` / `error`。没有 thinking / executing / compa
 - 上翻超过阈值就不要再自动贴底；给「回到底部」按钮（`.workspace-scroll-bottom`）。
 - 权限请求不是 timeline item，卡片挂在时间线后面，见 progress.md 里「权限不是 timeline 条目」。
 
+### 权限卡片
+
+权限卡片放在 timeline 末尾，但不建模成 timeline item。你从 agent 快照的 `pendingPermissions` 渲染它。
+
+- 先给决策上下文。plan 显示正文；shell 显示 cwd 和命令；edit 显示 diff；其他 tool detail 至少显示摘要。不要让用户只看标题猜风险。
+- provider 给了 `actions` 就保留它的 action id、顺序和 variant。没有 actions 才显示 Dashboard 的允许/拒绝。
+- `kind: "question"` 读取 `input.questions`。支持单选、多选、自由输入和 `allowEmpty`，回答写进 `updatedInput.answers`。解析失败时只允许忽略，不能发送一个没有答案的 allow。
+- `suggestions` 不随普通允许发送。单独显示「允许并记住」，点击后才写 `updatedPermissions`。
+- 点击后禁用整张卡片的重复操作并显示当前按钮的 spinner。等 daemon 的 `agent_permission_resolved` 再移除；失败把错误留在卡片内，用户可以重试。
+
 ### Header
 
 状态、Timeline/Terminal 切换、行内操作是**三组**，组间留空，不要 `ml-2` 把它们粘成一串。标题过长截断，不要把 tab 挤出视口。

@@ -247,6 +247,11 @@ class RuntimeClient implements DaemonClientLike, DaemonDataClient {
     archivedAt: null,
   })) as unknown as DaemonClientLike["resumeAgent"];
   readonly respondToPermission = vi.fn(async () => undefined);
+  readonly respondToPermissionAndWait = vi.fn(async () => ({
+    agentId: "",
+    requestId: "",
+    resolution: { behavior: "allow" as const },
+  }));
   readonly applyAgentConfig = vi.fn(async () => null);
   readonly getProvidersSnapshot = vi.fn(async () => ({
     entries: [],
@@ -536,12 +541,41 @@ describe("dashboard Paseo runtime", () => {
 
     await runtime.respondToPermission("host-a", "agent-host-a", "perm-1", { behavior: "allow" });
 
-    expect(clients.get("host-a")?.respondToPermission).toHaveBeenCalledWith(
+    expect(clients.get("host-a")?.respondToPermissionAndWait).toHaveBeenCalledWith(
       "agent-host-a",
       "perm-1",
       { behavior: "allow" },
     );
     expect(runtime.get("host-a").daemonData?.agents.data[0]?.agent.pendingPermissions).toEqual([]);
+  });
+
+  test("respondToPermission keeps the request when the daemon rejects the response", async () => {
+    const permission = {
+      id: "perm-1",
+      provider: "codex" as const,
+      name: "shell",
+      kind: "tool" as const,
+    };
+    const { clients, runtime } = createRuntimeWithClients((hostId, config) => {
+      const client = new RuntimeClient(hostId, config);
+      client.fetchAgents.mockImplementation(async () => {
+        const result = agentResult(hostId);
+        result.entries[0].agent.pendingPermissions = [permission];
+        return result;
+      });
+      client.respondToPermissionAndWait.mockRejectedValue(new Error("permission expired"));
+      return client;
+    });
+    await runtime.connectHost(makeHost("host-a"));
+
+    await expect(
+      runtime.respondToPermission("host-a", "agent-host-a", "perm-1", { behavior: "allow" }),
+    ).rejects.toThrow("permission expired");
+
+    expect(runtime.get("host-a").daemonData?.agents.data[0]?.agent.pendingPermissions).toEqual([
+      permission,
+    ]);
+    expect(clients.get("host-a")?.respondToPermission).not.toHaveBeenCalled();
   });
 
   test("viewAgent subscribes the selective stream and loads the timeline tail", async () => {

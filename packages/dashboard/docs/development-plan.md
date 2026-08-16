@@ -318,7 +318,7 @@
 **任务**
 
 1. Prompt 输入区：通过 client 发送（`sendMessage`/`sendAgentMessage`），并补上 P3.2 遗留的 `createAgent`/`resumeAgent` 入口。**完成**：Workspace composer 接 `runtime.sendAgentMessage`（Enter 发送）；空态 composer 变成新建会话入口（`components/new-session-composer.tsx`：主机·项目选择 + provider 选择 + initialPrompt → `runtime.createAgent`，成功后自动选中新 agent）；Agents 页新增「已归档」区，带 `persistence` handle 的条目可恢复（`runtime.resumeAgent` 走 handle，恢复后选中返回的快照 id）。
-2. 权限请求：订阅并响应 daemon 权限消息（`respondToPermission`）。**完成**：`components/permission-requests.tsx` 渲染 agent 快照的 `pendingPermissions`（有 `actions` 时按 action 的 behavior/variant 出按钮，否则默认允许/拒绝），点击走 `runtime.respondToPermission`（响应后本地先移除该请求，等 `agent_update` 广播兜底）。权限卡片渲染在 timeline 末尾，随自动滚底进入视野。未按 timeline 条目建模。
+2. 权限请求：订阅并响应 daemon 权限消息。**完成**：`components/permission-requests.tsx` 渲染 agent 快照的 `pendingPermissions`。按钮请求沿用 provider 的 `actions`；question 请求解析 `input.questions`，支持单选、多选、自由输入、可选空回答并把结果写入 `updatedInput.answers`；plan、shell、edit 等请求先展示审批上下文；Claude `suggestions` 显式提供「允许并记住」。点击走 `runtime.respondToPermission`，内部使用 `respondToPermissionAndWait` 等待 daemon 的 `agent_permission_resolved`，失败保留卡片和内联错误，成功后本地移除并由 `agent_update` 广播兜底。权限卡片渲染在 timeline 末尾，未按 timeline 条目建模。
 
 **产出**
 
@@ -326,7 +326,7 @@
 
 **验证**
 
-- runtime 5 个新单测 + agent-tree 归档行单测；Playwright 实测（真实 daemon + codex）：空态创建会话 → initialPrompt 进 timeline → 收到精确回复 → composer 发第二条消息 → 收到回复 → 归档 → Agents 页出现「已归档」区。权限卡片的真实触发未复现（该 daemon 的 codex 模式自动放行 shell 命令），响应链路由单测覆盖。
+- runtime 与 question response 的单测覆盖 daemon resolved/error、provider action id、计划正文、问题表单序列化和 permission suggestions。Playwright QA fixture 用 Codex plan、Claude shell + suggestions、OpenCode/Claude question 三种真实协议形状验证深色/亮色渲染和问题提交；真实 daemon + provider 的审批触发按 2026-08-16 决定后置，不阻塞 M3。创建→对话→追问→归档链路已用真实 daemon + codex 验证。
 
 ### UI 交互打磨（对齐 zeno 结构，不改协议）
 
@@ -346,13 +346,13 @@
 
 ### P3.5 兼容性测试
 
-**未开始。** 前置是 P3.1 任务 3。
+**已完成。** 随 commit `4638617ce` 提交。
 
 **任务**
 
-1. 建立 daemon 版本矩阵（新旧 daemon × 新 client）。
-2. 主要功能兼容 smoke tests。
-3. 新功能使用 `server_info.features.*` gating，不使用未标记 fallback。
+1. ~~建立 daemon 版本矩阵（新旧 daemon × 新 client）。~~ 完成：v0.1.80 / v0.1.81 / v0.1.106 三个版本覆盖 feature detection、兼容性判断与 gating 行为。
+2. ~~主要功能兼容 smoke tests。~~ 完成：15 个 vitest 用例在 `tests/e2e/src/compatibility.vitest.test.ts`。
+3. ~~新功能使用 `server_info.features.*` gating，不使用未标记 fallback。~~ 完成：`selectiveAgentTimeline` 与 `terminal-restore-modes` 两处 gate，COMPAT 标签在代码站点。`docs/compatibility-matrix.md` 记录矩阵与添加新 gate 流程。
 
 **产出**
 
@@ -364,7 +364,7 @@
 
 ### P3.6 历史 Web 缺口补齐
 
-M1/M2 里服务端和 contract 测试做完、Web 端从未接上的部分。这些子任务当时按服务端交付就记为完成，所以要单列出来，不要重复整个 P1/P2。
+**已完成。** 随 commit `4638617ce` 提交。M1/M2 里服务端和 contract 测试做完、Web 端从未接上的部分。这些子任务当时按服务端交付就记为完成，所以要单列出来，不要重复整个 P1/P2。
 
 **任务**
 

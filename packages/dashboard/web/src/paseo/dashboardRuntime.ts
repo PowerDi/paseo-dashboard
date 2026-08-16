@@ -313,11 +313,10 @@ export function createDashboardRuntime(
     },
 
     async respondToPermission(hostId, agentId, requestId, response) {
-      await requireClient(hostId).respondToPermission(agentId, requestId, response);
-      // -- clear local (duplicated below)
+      await requireClient(hostId).respondToPermissionAndWait(agentId, requestId, response);
 
-      // Clear the request locally; the daemon's agent_update broadcast is the
-      // source of truth but can lag behind the click.
+      // Clear the request after the daemon confirms it was resolved. The
+      // agent_update broadcast remains authoritative but can lag behind the click.
       const entry = daemonDataStore
         .getState()
         .byHost.get(hostId)
