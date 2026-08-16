@@ -132,6 +132,8 @@ MVP 选择 **服务端可解密的 envelope encryption**，原因是账号恢复
 ## 安全测试
 
 - 越权读取/更新/删除其他用户 Host 返回统一 404/403 策略。
+- Host import 的 idempotency key 和 capability fingerprint 只在账号内去重；不同用户的相同值不能复用或暴露其他用户 Host。
+- SSE 只向当前认证用户的订阅发送配置事件。
 - revoked session 无法 refresh、sync 或读取 Host。
 - response/cache/proxy/APM/log fixture 中不存在 capability 原文。
 - 数据库 dump 不能在无 KEK 情况下恢复 connection。

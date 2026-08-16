@@ -392,7 +392,7 @@
 **任务**
 
 1. 开放注册/邀请、邮箱验证、管理员策略。
-2. 租户隔离：所有 Host/API 的越权测试覆盖。
+2. ~~租户隔离：所有 Host/API 的越权测试覆盖。~~ **完成**：Host import/list/update/delete、Host sync、Session、Device、SSE 和审计均有跨用户合同；认证边界额外拒绝 locked/deleted user、revoked device 和 session/device 所属不一致。
 3. 注册/登录/重置/导入 abuse tests。
 
 **产出**

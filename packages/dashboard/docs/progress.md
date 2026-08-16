@@ -10,7 +10,7 @@
 - **代码位置**：`/root/workspace/code/paseo/packages/dashboard/`
 - **Paseo 源码**：`/root/workspace/code/paseo/`（monorepo 根，作为行为事实来源）
 - **当前阶段**：M3 已完成，P4.1 多用户安全进行中。
-- **当前分支**：`feat/dashboard-multi-user`，基于提交 `fc426c3ef`（`feat(dashboard): complete permission request cards`）。当前有未提交的 P4.1 会话边界改动。
+- **当前分支**：`feat/dashboard-multi-user`。P4.1 首轮会话边界提交为 `fcd57d89a`，当前继续多租户合同覆盖。
 
 ## Git 协作
 
@@ -55,7 +55,9 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 
 - `requireAuth` 与 refresh 统一检查 session 对应的 active user、未删除账户、未撤销 device，并拒绝 session 指向其他用户 device 的不一致记录。
 - Session 列表 join 同时按 `sessions.userId` 和 `devices.userId` 收口，避免坏数据把另一用户的设备名带入当前租户。
-- 新增 5 个 auth boundary 合同测试；安全合同补充跨用户 Session 列表/撤销负向测试。当前 contract 测试为 86 个。
+- Host import 的 idempotency key 和 capability fingerprint 明确只在账号内去重；不同用户导入同一 capability 不复用或泄露其他用户 Host。
+- 真实 HTTP SSE 双用户连接验证事件按认证用户隔离；Host、Host sync、Session、Device、SSE 和审计的跨用户合同矩阵已覆盖。
+- 新增 5 个 auth boundary、1 个 Host import isolation 合同测试，并补充跨用户 Session 与 SSE 测试。当前 contract 测试为 88 个。
 
 ### 亮色主题视觉验证（2026-08-16）
 
@@ -122,7 +124,7 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 
 ### 待开始
 
-M3 已完成。P3.1-P3.6、权限卡片增强、亮色主题视觉验证和收尾提交全部落地。P4.1 已开始，当前先收口认证主体边界和跨用户 Session API。
+M3 已完成。P3.1-P3.6、权限卡片增强、亮色主题视觉验证和收尾提交全部落地。P4.1 的 Host/API 租户隔离合同矩阵已完成。
 
 已搁置，不阻塞 M3：
 
@@ -130,9 +132,9 @@ M3 已完成。P3.1-P3.6、权限卡片增强、亮色主题视觉验证和收�
 
 下一步：
 
-1. 完成所有 Host/API 的跨用户测试矩阵，覆盖导入幂等键、capability fingerprint、Host sync、Session/Device、SSE 和审计。
-2. 设计并实现注册/邀请策略；邮箱验证和管理员策略放在该策略确定后落地。
-3. 补注册、登录、重置、导入 abuse tests。权限卡片真实 provider 手工验证仍后置，不阻塞 P4.1。
+1. 设计并实现注册/邀请策略；邮箱验证和管理员策略放在该策略确定后落地。
+2. 补注册、登录、重置、导入 abuse tests。
+3. 权限卡片真实 provider 手工验证继续后置，不阻塞 P4.1。
 
 完整序列见 `docs/development-plan.md`（P4 多用户与设备安全 / P5 Harmony / P6 可选高级能力）。
 
@@ -214,7 +216,7 @@ npm run dev:dashboard:server   # 后端 端口 3000
 npm run dev:dashboard:web      # 前端 端口 5173
 
 # 测试
-npm run test:dashboard         # web 94 + contract 79 + e2e vitest 8
+npm run test:dashboard         # web 128 + contract 88 + e2e vitest 23
 # web 单测必须走 workspace 脚本（该包 vite.config 的 @ 别名），不要从根 vitest 直接跑 web/src
 npm run test --workspace=@getpaseo/dashboard-web
 
@@ -261,7 +263,7 @@ npm run typecheck:dashboard
 ### 测试统计
 
 - web 单测 **128**（16 文件：dashboardRuntime 18、timeline-store 15、daemon-data-store 13、features 10、agent-tree 10、permission-request-form 8、app-store 8、terminalSession 8、connectionManager 7、live-activity 7、dashboardEvents 6、routes 5、format-time 4、diff-lines 4、code-language 3、dashboardApi 2）。
-- contract **79**（server-auth 16、server-security 14、server-events 14、server-hosts 13、server-devices-sessions 9、server-sync 8、auth 2、host-sync 3）+ e2e vitest **23**（connection-manager 4、offer-parser 3、compatibility 15、placeholder 1）= 静态统计 **230** 含 web。
+- contract **88**（server-auth 16、server-security 16、server-events 15、server-hosts 13、server-devices-sessions 9、server-sync 8、server-auth-boundaries 5、server-host-import-isolation 1、auth 2、host-sync 3）+ e2e vitest **23**（connection-manager 4、offer-parser 3、compatibility 15、placeholder 1）= 静态统计 **239** 含 web。
 - Playwright 浏览器 E2E 3 测试（需 `PLAYWRIGHT_BROWSERS_PATH=/tmp/playwright-browsers`）。
 - **web 单测**：`packages/dashboard/web/package.json` 有 `test` 脚本，走该包自己的 `vite.config.ts`（`@` 指向 `web/src`）。根 `vitest.config.ts` 仍把 `@` 指到 `packages/app/src`，所以从仓库根直接 `npx vitest run packages/dashboard/web/src` 会错；用 `npm run test --workspace=@getpaseo/dashboard-web`。`test:dashboard` 现已包含 web。P3.5 兼容性测试 15 单测在 `tests/e2e/src/compatibility.vitest.test.ts`。
 - **CI 不跑 dashboard 测试，这是有意的**：`.github/workflows/ci.yml` 的测试 job 点名指定包，不要往里加 dashboard。dashboard 测试在本地跑 `test:dashboard`。根 `npm run typecheck`/`lint`/`format:check` 是 `--workspaces`，这三项会覆盖到 dashboard。
@@ -318,3 +320,4 @@ npm run typecheck:dashboard
 | 2026-08-16 | Codex            | 完成亮色主题视觉验证：Playwright 临时 fixture 同屏检查 TypeScript code block、diff 与真实 xterm TerminalView；深色/亮色截图均无 page error，语法色、diff 增删/hunk 和 terminal ANSI 色对比正常。fixture 已删除，M3 只剩提交当前收尾改动。                                                                                                                                                                                                                                                                                                |
 | 2026-08-16 | Codex            | M3 收尾提交完成：`feat(dashboard): complete permission request cards`。P3.1-P3.6、权限卡片增强与亮色主题视觉验证全部落地；下一阶段切到 P4.1 多用户。                                                                                                                                                                                                                                                                                                                                                                                     |
 | 2026-08-16 | Codex            | P4.1 首轮认证边界：受保护请求与 refresh 统一校验 active user/device，Session 列表按租户同时约束 session/device 所属；新增 auth boundary 5 测试，补跨用户 Session 列表与撤销测试。目标测试文件 54 项通过。                                                                                                                                                                                                                                                                                                                                |
+| 2026-08-16 | Codex            | P4.1 租户隔离矩阵补齐：Host import 的 idempotency key/capability fingerprint 按账号隔离，真实 HTTP SSE 双用户连接不串事件；新增 2 个合同测试，contract 86→88。Host、sync、Session、Device、SSE 与审计跨用户合同已覆盖。                                                                                                                                                                                                                                                                                                                  |

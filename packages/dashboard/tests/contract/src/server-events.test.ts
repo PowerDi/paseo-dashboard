@@ -424,7 +424,9 @@ describe("Config event SSE lifecycle", () => {
   let cleanup: () => void;
   let eventBus: ConfigEventBus;
   let cookie: { name: string; value: string };
+  let otherCookie: { name: string; value: string };
   let userId: string;
+  let otherUserId: string;
   let baseUrl: string;
 
   beforeAll(async () => {
@@ -445,6 +447,19 @@ describe("Config event SSE lifecycle", () => {
     expect(register.statusCode).toBe(200);
     cookie = register.cookies[0];
     userId = register.json().user.id;
+
+    const otherRegister = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/register",
+      payload: {
+        email: "sse-other@example.com",
+        password: "test-password-456",
+        device: { installationId: "sse-other-device", name: "Other Device", platform: "web" },
+      },
+    });
+    expect(otherRegister.statusCode).toBe(200);
+    otherCookie = otherRegister.cookies[0];
+    otherUserId = otherRegister.json().user.id;
     eventBus = (app as unknown as { eventBus: ConfigEventBus }).eventBus;
 
     await app.listen({ host: "127.0.0.1", port: 0 });
@@ -515,5 +530,51 @@ describe("Config event SSE lifecycle", () => {
     expect(body).toContain('"revision":10');
     reconnect.request.destroy();
     await waitForClose(reconnectResponse);
+  });
+
+  it("keeps SSE events isolated by authenticated user", async () => {
+    const connection = openSse(baseUrl, cookie);
+    const otherConnection = openSse(baseUrl, otherCookie);
+    const response = await connection.response;
+    const otherResponse = await otherConnection.response;
+    try {
+      await Promise.all([
+        waitForChunk(response, ": connected\n\n"),
+        waitForChunk(otherResponse, ": connected\n\n"),
+      ]);
+
+      const ownEvents = waitForChunk(response, "hst_finish");
+      const otherEvents = waitForChunk(otherResponse, "hst_finish");
+      eventBus.emit(userId, {
+        type: "host.upserted",
+        revision: 11,
+        timestamp: "",
+        data: { hostId: "hst_user_a" },
+      });
+      eventBus.emit(otherUserId, {
+        type: "host.upserted",
+        revision: 1,
+        timestamp: "",
+        data: { hostId: "hst_user_b" },
+      });
+      for (const targetUserId of [userId, otherUserId]) {
+        eventBus.emit(targetUserId, {
+          type: "host.upserted",
+          revision: 12,
+          timestamp: "",
+          data: { hostId: "hst_finish" },
+        });
+      }
+
+      const [body, otherBody] = await Promise.all([ownEvents, otherEvents]);
+      expect(body).toContain("hst_user_a");
+      expect(body).not.toContain("hst_user_b");
+      expect(otherBody).toContain("hst_user_b");
+      expect(otherBody).not.toContain("hst_user_a");
+    } finally {
+      connection.request.destroy();
+      otherConnection.request.destroy();
+      await Promise.all([waitForClose(response), waitForClose(otherResponse)]);
+    }
   });
 });
