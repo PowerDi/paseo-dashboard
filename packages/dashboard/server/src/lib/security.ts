@@ -1,9 +1,6 @@
-/**
- * Security middleware: rate limiting, Origin validation, CSP headers.
- * All in-memory, no external dependencies.
- */
-
+import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import { rateLimited } from "./http.js";
 
 interface RateBucket {
   count: number;
@@ -15,18 +12,46 @@ interface RateLimitConfig {
   windowMs: number;
 }
 
-const DEFAULT_RATE_LIMITS: Record<string, RateLimitConfig> = {
-  "auth.login": { maxRequests: 10, windowMs: 60_000 },
-  "auth.register": { maxRequests: 3, windowMs: 60_000 },
-  "auth.refresh": { maxRequests: 20, windowMs: 60_000 },
-  "auth.change-password": { maxRequests: 5, windowMs: 60_000 },
-};
+const DEFAULT_RATE_LIMITS = {
+  "auth.login.ip": { maxRequests: 10, windowMs: 60_000 },
+  "auth.login.account": { maxRequests: 5, windowMs: 60_000 },
+  "auth.login.device": { maxRequests: 5, windowMs: 60_000 },
+  "auth.register.ip": { maxRequests: 3, windowMs: 60_000 },
+  "auth.register.account": { maxRequests: 3, windowMs: 60_000 },
+  "auth.register.device": { maxRequests: 3, windowMs: 60_000 },
+  "auth.refresh.ip": { maxRequests: 20, windowMs: 60_000 },
+  "auth.refresh.credential": { maxRequests: 10, windowMs: 60_000 },
+  "auth.change-password.ip": { maxRequests: 5, windowMs: 60_000 },
+  "host.import.ip": { maxRequests: 20, windowMs: 60_000 },
+  "host.import.account": { maxRequests: 10, windowMs: 60_000 },
+} as const satisfies Record<string, RateLimitConfig>;
 
-const RATE_LIMIT_ROUTES: Record<string, string> = {
-  "POST:/api/v1/auth/login": "auth.login",
-  "POST:/api/v1/auth/register": "auth.register",
-  "POST:/api/v1/auth/refresh": "auth.refresh",
-  "POST:/api/v1/auth/change-password": "auth.change-password",
+export type RateLimitScope = keyof typeof DEFAULT_RATE_LIMITS;
+
+interface RouteRateLimitPolicy {
+  ip: RateLimitScope;
+  account?: RateLimitScope;
+  device?: RateLimitScope;
+  credential?: RateLimitScope;
+}
+
+const RATE_LIMIT_ROUTES: Record<string, RouteRateLimitPolicy> = {
+  "POST:/api/v1/auth/login": {
+    ip: "auth.login.ip",
+    account: "auth.login.account",
+    device: "auth.login.device",
+  },
+  "POST:/api/v1/auth/register": {
+    ip: "auth.register.ip",
+    account: "auth.register.account",
+    device: "auth.register.device",
+  },
+  "POST:/api/v1/auth/refresh": {
+    ip: "auth.refresh.ip",
+    credential: "auth.refresh.credential",
+  },
+  "POST:/api/v1/auth/change-password": { ip: "auth.change-password.ip" },
+  "POST:/api/v1/hosts/import": { ip: "host.import.ip" },
 };
 
 const STATE_CHANGING_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
@@ -58,6 +83,64 @@ class RateLimiter {
   }
 }
 
+export interface RateLimits {
+  check(scope: RateLimitScope, identity: string): boolean;
+}
+
+class InMemoryRateLimits implements RateLimits {
+  private limiter = new RateLimiter();
+
+  constructor(private enabled: boolean) {}
+
+  check(scope: RateLimitScope, identity: string): boolean {
+    if (!this.enabled) return true;
+    const identityHash = createHash("sha256").update(identity).digest("hex");
+    return this.limiter.check(`${scope}:${identityHash}`, DEFAULT_RATE_LIMITS[scope]);
+  }
+
+  cleanup(): void {
+    this.limiter.cleanup();
+  }
+}
+
+function requestPath(url: string): string {
+  return url.split("?", 1)[0];
+}
+
+function requestBody(body: unknown): Record<string, unknown> | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  return body as Record<string, unknown>;
+}
+
+function deviceInstallationId(body: Record<string, unknown>): string | null {
+  const device = requestBody(body.device);
+  return typeof device?.installationId === "string" ? device.installationId : null;
+}
+
+function bodyLimitExceeded(
+  policy: RouteRateLimitPolicy,
+  body: Record<string, unknown> | null,
+  rateLimits: RateLimits,
+): boolean {
+  if (!body) return false;
+
+  if (policy.account && typeof body.email === "string") {
+    const email = body.email.toLowerCase().trim();
+    if (email && !rateLimits.check(policy.account, email)) return true;
+  }
+
+  if (policy.device) {
+    const installationId = deviceInstallationId(body);
+    if (installationId && !rateLimits.check(policy.device, installationId)) return true;
+  }
+
+  if (policy.credential && typeof body.refreshToken === "string" && body.refreshToken) {
+    if (!rateLimits.check(policy.credential, body.refreshToken)) return true;
+  }
+
+  return false;
+}
+
 function originMatches(origin: string | undefined, allowedOrigin: string): boolean {
   if (!origin) return true;
   if (allowedOrigin === "*") return true;
@@ -73,33 +156,24 @@ export function setupSecurity(
   allowedOrigin: string,
   rateLimitEnabled: boolean = true,
 ) {
-  const limiter = new RateLimiter();
-  const cleanupInterval = setInterval(() => limiter.cleanup(), 300_000);
+  const rateLimits = new InMemoryRateLimits(rateLimitEnabled);
+  const cleanupInterval = setInterval(() => rateLimits.cleanup(), 300_000);
   app.addHook("onClose", () => clearInterval(cleanupInterval));
 
-  // Rate limiting on auth endpoints
   if (rateLimitEnabled) {
     app.addHook("onRequest", async (req, rep) => {
-      const url = req.url;
-      const method = req.method;
+      const policy = RATE_LIMIT_ROUTES[`${req.method}:${requestPath(req.url)}`];
+      if (policy && !rateLimits.check(policy.ip, req.ip)) return rateLimited(rep);
+    });
 
-      const routeKey = `${method}:${url}`;
-      const scope = RATE_LIMIT_ROUTES[routeKey] ?? null;
-
-      if (!scope) return;
-      if (!limiter.check(`${scope}:${req.ip}`, DEFAULT_RATE_LIMITS[scope])) {
-        return rep.status(429).send({
-          error: {
-            code: "rate_limited",
-            message: "请求过于频繁，请稍后再试",
-            requestId: req.id,
-          },
-        });
+    app.addHook("preHandler", async (req, rep) => {
+      const policy = RATE_LIMIT_ROUTES[`${req.method}:${requestPath(req.url)}`];
+      if (policy && bodyLimitExceeded(policy, requestBody(req.body), rateLimits)) {
+        return rateLimited(rep);
       }
     });
   }
 
-  // Origin validation for state-changing requests
   app.addHook("preHandler", async (req, rep) => {
     if (!STATE_CHANGING_METHODS.has(req.method)) return;
     if (req.url.startsWith("/health")) return;
@@ -115,7 +189,6 @@ export function setupSecurity(
     }
   });
 
-  // Security headers on all responses
   app.addHook("onSend", async (req, rep, payload) => {
     rep.header("Content-Security-Policy", CSP_HEADER);
     rep.header("X-Content-Type-Options", "nosniff");
@@ -124,5 +197,5 @@ export function setupSecurity(
     return payload;
   });
 
-  return { limiter };
+  return { rateLimits };
 }

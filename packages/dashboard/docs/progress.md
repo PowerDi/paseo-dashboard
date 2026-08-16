@@ -10,7 +10,7 @@
 - **代码位置**：`/root/workspace/code/paseo/packages/dashboard/`
 - **Paseo 源码**：`/root/workspace/code/paseo/`（monorepo 根，作为行为事实来源）
 - **当前阶段**：M3 已完成，P4.1 多用户安全进行中。
-- **当前分支**：`feat/dashboard-multi-user`。租户隔离提交到 `f766b9a4a`，当前实现注册、邀请与管理员策略。
+- **当前分支**：`feat/dashboard-multi-user`。注册邀请策略已提交到 `0ac903003`，当前补 P4.1 abuse 防护。
 
 ## Git 协作
 
@@ -59,7 +59,9 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 - 真实 HTTP SSE 双用户连接验证事件按认证用户隔离；Host、Host sync、Session、Device、SSE 和审计的跨用户合同矩阵已覆盖。
 - 首个有效用户为 admin，后续用户为 member；公开注册关闭时只接受 admin 签发的 email-bound、限时、单次邀请。同邮箱重发会撤销旧 token，原始 token 只返回一次且数据库只存哈希。
 - 首用户判定、注册关闭判定、邀请消费和用户写入在同一个 `IMMEDIATE` 事务中；并发 bootstrap 只能成功一个管理员。
-- `inviteToken` 与邀请创建响应 token 已加入日志脱敏。新增 11 个注册策略合同测试（含公开注册、并发 bootstrap 与旧库角色迁移）；当前 contract 测试为 99 个。
+- `inviteToken` 与邀请创建响应 token 已加入日志脱敏。新增 11 个注册策略合同测试（含公开注册、并发 bootstrap 与旧库角色迁移）。
+- rate limiter 从仅 IP 扩展为分层 bucket：注册/登录按 IP、normalized email、installation；refresh 按 IP、credential hash；Host 导入按 IP、认证账号。bucket identity 只存 SHA-256，query string 不能绕过路由限流，429 带 `Retry-After`。
+- 新增 7 个 abuse protection 合同测试；当前 contract 测试为 106 个。重置密码尚无 endpoint，对应 abuse 防护随邮箱恢复方案实现。
 
 ### 亮色主题视觉验证（2026-08-16）
 
@@ -93,7 +95,7 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 - [x] **P2.1 增量同步与冲突**：hosts 表加 `lastSyncRevision` 列；重写 sync API 按 `lastSyncRevision > after` 游标查询；Web 端同步状态机（localStorage 持久化、分页、幂等、全量 resync）；8 个契约测试。
 - [x] **P2.2 设备与 Session 管理**：devices 加 `lastSyncRevision`、sessions 加 `createdAt`；GET/DELETE `/devices` 和 `/sessions` 路由；sync 追踪设备 revision；9 个契约测试。
 - [x] **P2.3 实时配置事件**：in-memory `ConfigEventBus`（按 userId 分区）；SSE `/events` 端点；mutation 路径（import/update/delete/revoke）触发事件；10 个测试（5 单元 + 5 集成）。
-- [x] **P2.4 安全加固**：内存 rate limiter（login/register/refresh/change-password 按 IP）；Origin 校验（状态变更请求）；CSP/X-Frame-Options/nosniff headers；审计查询 API `/audit-events`（ULID cursor 分页）；14 个安全测试（跨用户隔离、rate limit、Origin、CSP、审计）。
+- [x] **P2.4 安全加固**：内存 rate limiter（P4.1 已扩展为 IP/账号/installation/credential 分层）；Origin 校验（状态变更请求）；CSP/X-Frame-Options/nosniff headers；审计查询 API `/audit-events`（ULID cursor 分页）。
 - [x] **Git 仓库初始化**：paseo-board 独立仓库基线 commit `09b5a63`。
 - [x] **迁移到 Paseo monorepo**：paseo-board 代码迁移到 `packages/dashboard/`，分支 `feat/dashboard-migration`，commit `3b0ca1c03`，推送到 origin。
 - [x] **P3.1 Connection Manager**：`DefaultPaseoConnectionManager` 多 Host 连接槽 + 状态订阅 + 官方 client `reconnect: { enabled: true }`；`daemon-data-store` 承载 projects/workspaces/agents（游标翻页 + 请求版本号防串台）；登出/删除 Host 时 `disconnectAll`/`disconnectHost` 清理连接与本地数据；`paseo/features.ts` 模块提供 `getDaemonFeatures(serverInfo)` 集中提取 feature flags，`selectiveAgentTimeline` 在 `viewAgent`/`leaveAgent` gating，`terminalRestoreModes` 在 `terminalSession.ts` gating（带 COMPAT 标签，退出条件满足）。
@@ -135,7 +137,7 @@ M3 已完成。P4.1 的 Host/API 租户隔离合同矩阵与 admin 邀请注册�
 下一步：
 
 1. 设计并实现邮箱验证，明确 bootstrap、公开注册和邀请注册的验证时机。
-2. 补注册、登录、重置、导入 abuse tests。
+2. 设计密码恢复方案；endpoint 落地时同步补重置 abuse tests。
 3. 权限卡片真实 provider 手工验证继续后置，不阻塞 P4.1。
 
 完整序列见 `docs/development-plan.md`（P4 多用户与设备安全 / P5 Harmony / P6 可选高级能力）。
@@ -265,7 +267,7 @@ npm run typecheck:dashboard
 ### 测试统计
 
 - web 单测 **128**（16 文件：dashboardRuntime 18、timeline-store 15、daemon-data-store 13、features 10、agent-tree 10、permission-request-form 8、app-store 8、terminalSession 8、connectionManager 7、live-activity 7、dashboardEvents 6、routes 5、format-time 4、diff-lines 4、code-language 3、dashboardApi 2）。
-- contract **99**（server-auth 16、server-security 16、server-events 15、server-hosts 13、server-devices-sessions 9、server-registration-policy 11、server-sync 8、server-auth-boundaries 5、server-host-import-isolation 1、auth 2、host-sync 3）+ e2e vitest **23**（connection-manager 4、offer-parser 3、compatibility 15、placeholder 1）= 静态统计 **250** 含 web。
+- contract **106**（server-auth 16、server-security 16、server-events 15、server-hosts 13、server-devices-sessions 9、server-registration-policy 11、server-sync 8、server-abuse-protection 7、server-auth-boundaries 5、server-host-import-isolation 1、auth 2、host-sync 3）+ e2e vitest **23**（connection-manager 4、offer-parser 3、compatibility 15、placeholder 1）= 静态统计 **257** 含 web。
 - Playwright 浏览器 E2E 3 测试（需 `PLAYWRIGHT_BROWSERS_PATH=/tmp/playwright-browsers`）。
 - **web 单测**：`packages/dashboard/web/package.json` 有 `test` 脚本，走该包自己的 `vite.config.ts`（`@` 指向 `web/src`）。根 `vitest.config.ts` 仍把 `@` 指到 `packages/app/src`，所以从仓库根直接 `npx vitest run packages/dashboard/web/src` 会错；用 `npm run test --workspace=@getpaseo/dashboard-web`。`test:dashboard` 现已包含 web。P3.5 兼容性测试 15 单测在 `tests/e2e/src/compatibility.vitest.test.ts`。
 - **CI 不跑 dashboard 测试，这是有意的**：`.github/workflows/ci.yml` 的测试 job 点名指定包，不要往里加 dashboard。dashboard 测试在本地跑 `test:dashboard`。根 `npm run typecheck`/`lint`/`format:check` 是 `--workspaces`，这三项会覆盖到 dashboard。
@@ -324,3 +326,4 @@ npm run typecheck:dashboard
 | 2026-08-16 | Codex            | P4.1 首轮认证边界：受保护请求与 refresh 统一校验 active user/device，Session 列表按租户同时约束 session/device 所属；新增 auth boundary 5 测试，补跨用户 Session 列表与撤销测试。目标测试文件 54 项通过。                                                                                                                                                                                                                                                                                                                                |
 | 2026-08-16 | Codex            | P4.1 租户隔离矩阵补齐：Host import 的 idempotency key/capability fingerprint 按账号隔离，真实 HTTP SSE 双用户连接不串事件；新增 2 个合同测试，contract 86→88。Host、sync、Session、Device、SSE 与审计跨用户合同已覆盖。                                                                                                                                                                                                                                                                                                                  |
 | 2026-08-16 | Codex            | P4.1 注册策略：首用户 admin、后续 member；关闭公开注册时仅接受 admin 创建的 email-bound、限时、单次邀请；同邮箱重发撤销旧 token，原始 token 只返回一次且日志脱敏。注册判定和写入改为 `IMMEDIATE` 事务，并发 bootstrap 只能产生一个管理员。新增 11 个合同测试，contract 88→99，静态总数 239→250；邮箱验证与 abuse tests 继续。                                                                                                                                                                                                            |
+| 2026-08-16 | Codex            | P4.1 abuse 防护：注册/登录按 IP、normalized email、installation 分层限流，refresh 按 IP/credential hash，Host 导入按 IP/认证账号；bucket identity 只保留 SHA-256，query string 不再绕过匹配，429 返回 `Retry-After`。新增 7 个合同测试，contract 99→106，静态总数 250→257；重置密码防护随未来恢复 endpoint 实现。                                                                                                                                                                                                                        |

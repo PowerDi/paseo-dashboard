@@ -36,6 +36,11 @@ export function forbidden(rep: FastifyReply, message = "无权执行此操作") 
   return sendError(rep, 403, ErrorCodes.FORBIDDEN, message);
 }
 
+export function rateLimited(rep: FastifyReply) {
+  rep.header("Retry-After", "60");
+  return sendError(rep, 429, ErrorCodes.RATE_LIMITED, "请求过于频繁，请稍后再试");
+}
+
 export function notFound(rep: FastifyReply, message = "资源不存在") {
   return sendError(rep, 404, ErrorCodes.NOT_FOUND, message);
 }

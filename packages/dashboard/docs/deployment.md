@@ -24,16 +24,17 @@ node server/dist/index.js
 
 ## 2. 环境变量
 
-| 变量                            | 必填   | 默认值                  | 说明                                          |
-| ------------------------------- | ------ | ----------------------- | --------------------------------------------- |
-| `PASEO_BOARD_HOST`              | 否     | `127.0.0.1`             | 监听地址，生产应设为 `0.0.0.0` 或反代后端地址 |
-| `PASEO_BOARD_PORT`              | 否     | `3000`                  | 监听端口                                      |
-| `PASEO_BOARD_DATA_DIR`          | 是     | `./data`                | 数据目录（SQLite + KEK），应挂载到持久卷      |
-| `PASEO_BOARD_KEK_FILE`          | **是** | 空（开发自动生成）      | 32 字节 KEK 密钥文件路径，权限必须 `0600`     |
-| `PASEO_BOARD_CORS_ORIGIN`       | 否     | `http://localhost:5173` | 前端域名                                      |
-| `PASEO_BOARD_REGISTRATION_OPEN` | 否     | `true`                  | 是否允许首用户之后的公开注册                  |
-| `PASEO_BOARD_LOG_LEVEL`         | 否     | `info`                  | 日志级别                                      |
-| `PASEO_BOARD_TRUSTED_PROXIES`   | 否     | 空                      | 反代 IP，逗号分隔，如 `10.0.0.1,10.0.0.2`     |
+| 变量                             | 必填   | 默认值                  | 说明                                          |
+| -------------------------------- | ------ | ----------------------- | --------------------------------------------- |
+| `PASEO_BOARD_HOST`               | 否     | `127.0.0.1`             | 监听地址，生产应设为 `0.0.0.0` 或反代后端地址 |
+| `PASEO_BOARD_PORT`               | 否     | `3000`                  | 监听端口                                      |
+| `PASEO_BOARD_DATA_DIR`           | 是     | `./data`                | 数据目录（SQLite + KEK），应挂载到持久卷      |
+| `PASEO_BOARD_KEK_FILE`           | **是** | 空（开发自动生成）      | 32 字节 KEK 密钥文件路径，权限必须 `0600`     |
+| `PASEO_BOARD_CORS_ORIGIN`        | 否     | `http://localhost:5173` | 前端域名                                      |
+| `PASEO_BOARD_REGISTRATION_OPEN`  | 否     | `true`                  | 是否允许首用户之后的公开注册                  |
+| `PASEO_BOARD_LOG_LEVEL`          | 否     | `info`                  | 日志级别                                      |
+| `PASEO_BOARD_RATE_LIMIT_ENABLED` | 否     | `true`                  | 是否启用内存限流；生产不要关闭                |
+| `PASEO_BOARD_TRUSTED_PROXIES`    | 否     | 空                      | 反代 IP，逗号分隔，如 `10.0.0.1,10.0.0.2`     |
 
 ## 3. KEK 管理
 
@@ -110,6 +111,8 @@ server {
 
 ### 反代注意事项
 
+- 内存限流依赖正确的 `req.ip`。设置 `PASEO_BOARD_TRUSTED_PROXIES` 后才信任对应反代提供的 forwarded IP。
+- 当前限流状态不跨进程共享。多实例部署前接入共享限流存储，不能把流量轮询当作扩容限流额度。
 - **禁止 body dump / APM body capture**：pairing offer 包含 daemon capability，不得记录请求体
 - 设置 `PASEO_BOARD_TRUSTED_PROXIES` 为反代 IP，确保 `req.ip` 正确
 - CSP 建议至少 `default-src 'self'`，`connect-src` 允许 Dashboard API 域名 + 用户配置的 Relay 域名
@@ -150,6 +153,7 @@ server {
 - [ ] KEK 与数据库存储在不同位置
 - [ ] 按部署策略设置 `PASEO_BOARD_REGISTRATION_OPEN`；关闭时使用 admin 邀请新增用户
 - [ ] 反向代理启用 TLS
+- [ ] `PASEO_BOARD_RATE_LIMIT_ENABLED=true`，trusted proxy 只包含实际反代
 - [ ] 请求体 logging / APM body capture 已关闭
 - [ ] 日志中无 offer/token/connection/cookie/password 原文
 - [ ] API 响应包含 `Cache-Control: no-store`

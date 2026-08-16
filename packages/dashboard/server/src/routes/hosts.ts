@@ -1,13 +1,14 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { newId } from "../lib/id.js";
 import { requireAuth } from "../lib/auth.js";
-import { badRequest, notFound, conflict, internal } from "../lib/http.js";
+import { badRequest, notFound, conflict, internal, rateLimited } from "../lib/http.js";
 import { hosts, hostConnections, users, auditEvents } from "../db/schema.js";
 import { EnvelopeEncryptor, capabilityFingerprint } from "../lib/encryption.js";
 import { ErrorCodes } from "@getpaseo/dashboard-shared";
 import type { Db } from "../db/index.js";
 import type { ConfigEventBus } from "../lib/event-bus.js";
+import type { RateLimits } from "../lib/security.js";
 
 /**
  * Derive a domain-separated HMAC secret from the KEK for capability
@@ -20,11 +21,18 @@ export function registerHostRoutes(
   encryptor: EnvelopeEncryptor,
   fingerprintSecret: Buffer,
   eventBus: ConfigEventBus,
+  rateLimits: RateLimits,
 ) {
   const auth = requireAuth(db);
 
+  async function enforceHostImportRateLimit(req: FastifyRequest, rep: FastifyReply) {
+    if (!rateLimits.check("host.import.account", req.auth!.userId)) return rateLimited(rep);
+  }
+
+  const importGuards = [auth, enforceHostImportRateLimit];
+
   // ── POST /api/v1/hosts/import ──────────────────────
-  app.post("/api/v1/hosts/import", { preHandler: auth }, async (req, rep) => {
+  app.post("/api/v1/hosts/import", { preHandler: importGuards }, async (req, rep) => {
     const { label, connection, clientVerification, idempotencyKey } = req.body as {
       label: string;
       connection: {

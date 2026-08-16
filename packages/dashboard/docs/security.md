@@ -95,7 +95,10 @@ MVP 选择 **服务端可解密的 envelope encryption**，原因是账号恢复
 
 ### 防护
 
-- 登录、注册、重置、offer 导入按 IP、账号和设备维度 rate limit。
+- 注册和登录按 IP、normalized email 与 installation id 三个独立 bucket 限流；refresh 按 IP 与 token hash；Host 导入按 IP 与认证账号；修改密码按 IP。
+- bucket identity 先做 SHA-256，不在内存键中保留邮箱、installation id 或 refresh token 原文。路径匹配忽略 query string，拒绝响应包含 `Retry-After`。
+- 当前 limiter 是单进程内存状态。多实例部署必须改用共享限流存储，否则每个实例各自计数。
+- 重置密码 endpoint 尚未提供；恢复方案落地时必须同时增加 IP、账号和 token 维度限流。
 - 登录错误不暴露账号是否存在；指数退避和临时锁定必须避免永久 DoS。
 - CORS 默认只允许配置的 Dashboard origin；不使用 `*` 与凭据。
 - CSP 至少限制 `default-src 'self'`、明确 `connect-src` 为 Dashboard API 与用户配置 Relay 所需策略；禁止不受控第三方脚本。
@@ -138,6 +141,7 @@ MVP 选择 **服务端可解密的 envelope encryption**，原因是账号恢复
 - Host import 的 idempotency key 和 capability fingerprint 只在账号内去重；不同用户的相同值不能复用或暴露其他用户 Host。
 - SSE 只向当前认证用户的订阅发送配置事件。
 - 关闭公开注册时，无邀请注册失败；邀请必须匹配邮箱、未过期、未撤销、未使用，且并发首用户注册只能产生一个管理员。
+- 注册、登录、refresh 和 Host 导入分别验证 IP、账号、installation 或 credential bucket；更换 query string、IP、账号或 installation 不能绕过仍适用的其他维度。
 - revoked session 无法 refresh、sync 或读取 Host。
 - response/cache/proxy/APM/log fixture 中不存在 capability 原文。
 - 数据库 dump 不能在无 KEK 情况下恢复 connection。

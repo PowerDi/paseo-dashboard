@@ -106,7 +106,7 @@ export function buildApp(config: ServerConfig) {
   });
 
   // Security middleware (rate limit, Origin validation, CSP)
-  setupSecurity(app, config.corsOrigin, config.rateLimitEnabled);
+  const { rateLimits } = setupSecurity(app, config.corsOrigin, config.rateLimitEnabled);
 
   // Routes
   app.get("/health", async () => ({ status: "ok", version: "0.1.0" }));
@@ -115,7 +115,7 @@ export function buildApp(config: ServerConfig) {
   const eventBus = new ConfigEventBus();
   app.decorate("eventBus", eventBus);
   registerEventRoutes(app, db, eventBus);
-  registerHostRoutes(app, db, encryptor, fingerprintSecret, eventBus);
+  registerHostRoutes(app, db, encryptor, fingerprintSecret, eventBus, rateLimits);
   registerSyncRoutes(app, db, encryptor);
   registerDeviceRoutes(app, db, eventBus);
   registerSessionRoutes(app, db, eventBus);

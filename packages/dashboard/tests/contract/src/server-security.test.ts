@@ -215,28 +215,27 @@ describe("Security hardening (P2.4)", () => {
 
   // ── Rate limiting ──────────────────────────────────
 
-  it("login rate limit returns 429 after 10 attempts", async () => {
-    // Make 10 failed login attempts (limit is 10 per minute)
+  it("login IP rate limit cannot be bypassed with query strings", async () => {
     for (let i = 0; i < 10; i++) {
-      await app.inject({
+      const response = await app.inject({
         method: "POST",
-        url: "/api/v1/auth/login",
+        url: `/api/v1/auth/login?attempt=${i}`,
         payload: {
-          email: "wrong@security.test",
+          email: `wrong-${i}@security.test`,
           password: "wrong",
           device: { installationId: `rate-${i}`, name: "Rate", platform: "web" },
         },
       });
+      expect(response.statusCode).toBe(401);
     }
 
-    // 11th attempt should be rate limited
     const res = await app.inject({
       method: "POST",
-      url: "/api/v1/auth/login",
+      url: "/api/v1/auth/login?attempt=10",
       payload: {
-        email: "wrong@security.test",
+        email: "wrong-10@security.test",
         password: "wrong",
-        device: { installationId: "rate-11", name: "Rate", platform: "web" },
+        device: { installationId: "rate-10", name: "Rate", platform: "web" },
       },
     });
     expect(res.statusCode).toBe(429);
