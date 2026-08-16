@@ -115,12 +115,12 @@
 3. Session：access token 短时有效，refresh token 高熵、单次轮换、服务端只存哈希。
 4. Refresh token reuse 检测：撤销整个 token family。
 5. 修改密码：撤销其他 session，轮换当前 refresh token。
-6. 忘记密码：暂不提供（无邮件基础设施时存在攻击面）。未来需要邮件服务 + 管理员 recovery code/CLI 方案后启用。
+6. 忘记密码：不提供邮件找回。未来按 `security.md` 的恢复边界设计本地管理员 recovery code/CLI。
 7. 登出：撤销当前 session。
 
 **产出**
 
-- 完整认证 API（`/api/v1/auth/*`）与 Web 登录/注册/重置页面。
+- 完整认证 API（`/api/v1/auth/*`）与 Web 登录、注册和修改密码页面。
 
 **验证**
 
@@ -387,13 +387,13 @@
 
 > 对应 `roadmap.md` M4。目标：租户隔离、key rotation、注册/登录防御。
 
-### P4.1 多用户
+### P4.1 多用户（完成）
 
 **任务**
 
-1. **进行中**：开放注册、admin/member 角色与 admin 邀请已完成；邮箱验证待实现。邀请绑定邮箱、限时、单次使用，服务端只存 token 哈希。
+1. **完成**：开放注册、admin/member 角色与 admin 邀请已完成。邀请绑定邮箱、限时、单次使用，服务端只存 token 哈希；邮箱验证不在产品范围，认证边界见 `security.md`。
 2. ~~租户隔离：所有 Host/API 的越权测试覆盖。~~ **完成**：Host import/list/update/delete、Host sync、Session、Device、SSE 和审计均有跨用户合同；认证边界额外拒绝 locked/deleted user、revoked device 和 session/device 所属不一致。
-3. **部分完成**：注册、登录、refresh 与 Host 导入 abuse tests 已完成；重置密码尚无 endpoint，随邮箱恢复方案一起实现。
+3. **完成**：注册、登录、refresh 与 Host 导入 abuse tests 已完成。邮件找回和公开重置密码 endpoint 不在范围内；未来若增加本地恢复入口，按其凭据和调用边界单独设计防护。
 
 **产出**
 

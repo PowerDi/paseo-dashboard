@@ -183,7 +183,7 @@ server   ──X Paseo client/Relay/daemon
 | `createdAt/expiresAt`  | 创建与过期时间                             |
 | `acceptedAt/revokedAt` | 单次消费与撤销状态；同邮箱重发会撤销旧邀请 |
 
-只有 admin 可以创建邀请。邀请关闭公开注册时的注册入口，不改变新用户的 `member` 角色。
+只有 admin 可以创建邀请。邀请关闭公开注册时的注册入口，不改变新用户的 `member` 角色。认证边界见 [security.md](security.md#认证方案)。
 
 ### Host
 
@@ -291,8 +291,6 @@ POST /api/v1/invitations             # admin；返回一次性原始 token
 POST /api/v1/auth/login
 POST /api/v1/auth/refresh
 POST /api/v1/auth/logout
-POST /api/v1/auth/forgot-password   # 暂不提供（无邮件基础设施时存在攻击面）
-POST /api/v1/auth/reset-password     # 暂不提供（同上）
 POST /api/v1/auth/change-password
 GET  /api/v1/me
 DELETE /api/v1/me

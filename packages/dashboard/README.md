@@ -54,6 +54,6 @@ npm run typecheck:dashboard
 
 ## 当前状态
 
-M3 已完成，P4.1 多用户安全进行中：租户隔离与 admin 邀请注册已落地，邮箱验证和 abuse tests 待完成。
+M3 与 P4.1 已完成：租户隔离、admin 邀请注册和现有认证入口的 abuse 防护已落地。下一阶段是 P4.2 强认证与会话审计。
 
 详见 `docs/progress.md`。

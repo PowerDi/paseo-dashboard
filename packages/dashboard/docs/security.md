@@ -80,7 +80,7 @@ MVP 选择 **服务端可解密的 envelope encryption**，原因是账号恢复
 - 首个有效用户为 `admin`。首用户判定与写入在同一数据库事务中，并发启动只能创建一个管理员。
 - `PASEO_BOARD_REGISTRATION_OPEN` 只控制首用户之后的公开注册。关闭时，admin 可签发绑定邮箱、限时、单次使用的邀请；新用户角色为 `member`。
 - 邀请原始 token 只在创建响应中返回一次，服务端只存哈希。同邮箱重发会撤销之前未使用的邀请。
-- 邮箱验证尚未实现；在完成验证前，邀请的邮箱绑定只约束注册请求，不证明邮箱所有权。
+- Dashboard 定位为自托管自用，不验证邮箱所有权。邮箱是唯一登录标识和邀请匹配条件；邀请 token 的持有证明管理员授权，管理员应通过可信私密渠道传递 token。
 - 后续继续支持邮箱密码；Passkey 作为强认证和无密码登录；OAuth 仅在明确部署需求后增加。
 - 不把“单用户模式”做成无认证模式。
 
@@ -91,14 +91,14 @@ MVP 选择 **服务端可解密的 envelope encryption**，原因是账号恢复
 - 检测 refresh token reuse 后撤销整个 token family。
 - Web 优先使用 `Secure`、`HttpOnly`、`SameSite=Lax/Strict` Cookie；状态改变请求使用 CSRF token 或严格 same-origin + Origin 校验。
 - Harmony 使用 bearer access token，refresh token 存平台安全存储；不得依赖浏览器 Cookie。
-- 修改/重置密码默认撤销其他 session；设备撤销撤销该设备所有 session。
+- 修改密码默认撤销其他 session；设备撤销撤销该设备所有 session。
 
 ### 防护
 
 - 注册和登录按 IP、normalized email 与 installation id 三个独立 bucket 限流；refresh 按 IP 与 token hash；Host 导入按 IP 与认证账号；修改密码按 IP。
 - bucket identity 先做 SHA-256，不在内存键中保留邮箱、installation id 或 refresh token 原文。路径匹配忽略 query string，拒绝响应包含 `Retry-After`。
 - 当前 limiter 是单进程内存状态。多实例部署必须改用共享限流存储，否则每个实例各自计数。
-- 重置密码 endpoint 尚未提供；恢复方案落地时必须同时增加 IP、账号和 token 维度限流。
+- 不提供邮件找回或公开重置密码 endpoint。未来的本地管理员 recovery code/CLI 必须独立定义授权、审计和撤销边界；若增加网络入口，再补对应限流。
 - 登录错误不暴露账号是否存在；指数退避和临时锁定必须避免永久 DoS。
 - CORS 默认只允许配置的 Dashboard origin；不使用 `*` 与凭据。
 - CSP 至少限制 `default-src 'self'`、明确 `connect-src` 为 Dashboard API 与用户配置 Relay 所需策略；禁止不受控第三方脚本。
