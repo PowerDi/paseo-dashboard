@@ -137,7 +137,7 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 
 ### 待开始
 
-M3、P4.1、P4.2 当前范围和 P4.3 已完成。Dashboard 不验证邮箱所有权；风险登录和新设备提示暂缓。
+M3、P4.1、P4.2 当前范围、P4.3 和 P4.4 已完成。Dashboard 不验证邮箱所有权；风险登录和新设备提示暂缓。
 
 已搁置，不阻塞 M3：
 
@@ -145,10 +145,10 @@ M3、P4.1、P4.2 当前范围和 P4.3 已完成。Dashboard 不验证邮箱所�
 
 下一步：
 
-1. 进入 P4.4，只做 `HostGrant` 数据模型和授权边界审查，不启用分享 UI 或虚假只读权限。
+1. 进入 P5.1，验证 Harmony 的 WebSocket binary frame、ArrayBuffer、安全随机数、文本编码和 `tweetnacl` 运行环境。
 2. 风险登录和新设备提示继续暂缓；需要恢复时直接从现有 `newDevice` 与登录环境审计事实接 UI。
 3. 密码恢复按未来本地管理员 recovery code/CLI 单独设计，不引入邮件服务。
-4. 权限卡片真实 provider 手工验证继续后置，不阻塞 P4。
+4. 权限卡片真实 provider 手工验证继续后置，不阻塞 P5。
 
 完整序列见 `docs/development-plan.md`（P4 多用户与设备安全 / P5 Harmony / P6 可选高级能力）。
 
@@ -341,3 +341,4 @@ npm run typecheck:dashboard
 | 2026-08-16 | Codex            | 产品决策收口：Dashboard 定位为自托管自用，不验证邮箱所有权，也不引入邮件找回。邮箱只作为登录标识和邀请匹配条件，邀请 token 的持有证明管理员授权；P4.1 据此完成，下一阶段转入 P4.2 session/device 风险审计与 Passkey。                                                                                                                                                                                                                                                                                                                    |
 | 2026-08-16 | Codex            | P4.2 当前范围完成：device/session 增加截断 IP、User-Agent 摘要和认证方式；Web 增加 discoverable Passkey 注册、登录、列表和删除；challenge 哈希化、五分钟、单次消费并校验 RP/origin/UV/counter，credential 与 ceremony 有独立 abuse bucket。新增 6 个合同测试和 2 个 Web 单测，contract 106→112、web 128→130、静态总数 257→265。风险登录与新设备提示按用户决定暂缓，下一阶段 P4.3。                                                                                                                                                       |
 | 2026-08-16 | Codex            | P4.3 完成：版本化 KeyProvider 支持 file 与 AWS KMS data key；新增 key registry、加密 fingerprint secret、admin 状态/轮换 API、当前密码校验、IP 限流、日志脱敏和审计。轮换先切 active，再在线重包 encryptedDek，支持中断后从 decrypt-only 继续，完成后退休旧 key。新增 6 个合同测试，contract 112→118、静态总数 265→271；部署文档补 file/KMS 轮换和隔离恢复演练。                                                                                                                                                                         |
+| 2026-08-16 | Codex            | P4.4 完成：完成 HostGrant 逻辑模型和授权边界审查；owner 继续由 hosts.ownerUserId 定义，active grant 按 Host/用户唯一，撤销保留历史；admin 不自动获得 capability，operator/viewer 等待 daemon per-client scope、credential 和 revoke 支持。未新增 grant 表、API 或 UI。                                                                                                                                                                                                                                                                   |

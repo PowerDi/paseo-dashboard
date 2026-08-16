@@ -30,6 +30,12 @@
 
 **已决定（2026-08-12）：** 实现 KeyProvider 接口。生产使用 KMS/secret manager；本地自托管允许挂载独立 32-byte key file。启动时拒绝缺失或权限过宽的 key，不自动生成后写入数据库卷。M1 先实现本地 key file 模式。
 
+### HostGrant 与 daemon scope
+
+**推荐默认：** Host owner 保持在 `hosts.ownerUserId`；未来分享通过 `HostGrant(hostId, granteeUserId, role, lifecycle)` 扩展。grant 不携带 capability，也不改变 Host 主键。Dashboard 只有在 daemon 提供 per-client、可撤销、可范围化 credential 后才启用 `operator` 或 `viewer`。
+
+**已决定（2026-08-16）：** P4.4 只完成模型审查，不创建 grant 表、API 或 UI。`admin` 不因账户角色获得所有 Host 访问权；owner 负责创建授权，账户管理员可以撤销授权但不能读取 Host capability。owner grant 不落表，撤销记录保留历史，active grant 按 `(hostId, granteeUserId)` 唯一。真正实现时必须另行设计按用户的 sync projection/outbox。
+
 ### 注册策略
 
 **推荐默认：** M1 首个用户注册后关闭注册。M4 再增加邀请或开放注册。

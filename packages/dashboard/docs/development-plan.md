@@ -438,20 +438,22 @@
 
 - 合同测试覆盖 file 在线轮换、旧 key 退休后恢复、旧数据库迁移、中断轮换继续、AWS KMS 密文 reference 重启解密和轮换接口限流。
 
-### P4.4 HostGrant 模型审查
+### P4.4 HostGrant 模型审查（完成）
 
 **任务**
 
-1. 设计 `HostGrant` 数据模型（不启用分享语义，仅审查）。
-2. 确认 future 分享不更改 Host 身份，通过 grant 扩展。
+1. **完成**：确定 `HostGrant` 的主体、角色、生命周期、撤销和历史约束；不创建表或启用分享语义。
+2. **完成**：确认 Host 身份继续由 `hosts.ownerUserId` 定义，未来分享只通过 grant 扩展。
 
 **产出**
 
-- `HostGrant` 模型设计（不实现分享 UI）。
+- 架构文档中的 HostGrant 逻辑模型：owner 不落 grant 行，active grant 按 Host/用户唯一，撤销保留历史。
+- 安全边界：admin 不自动获得 Host capability，`operator`/`viewer` 等待 daemon per-client scope、credential 和 revoke 支持。
+- 明确 sync projection/outbox 是未来实现依赖，不能直接复用当前 owner-only sync 查询。
 
 **验证**
 
-- 文档明确 grant role 不能超出 daemon 实际能力。
+- 文档明确 grant role 不能超出 daemon 实际能力；未新增分享 API、数据库表或 UI。
 
 ## P5：Harmony 客户端（M5）
 

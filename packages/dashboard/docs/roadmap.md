@@ -109,7 +109,7 @@
 - 开放注册/邀请、管理员策略。认证边界见 `security.md`。
 - Passkey、风险登录提示、精细 session/device 审计。
 - 生产 KMS、在线 key rotation、备份/恢复演练。
-- `HostGrant` 数据模型启用前的授权审查，但不在 daemon 无 scope 时提供虚假只读权限。
+- `HostGrant` 数据模型和授权边界审查已完成；不在 daemon 无 scope 时提供虚假只读权限，grant 语义暂不启用。
 
 **退出条件**
 

@@ -228,16 +228,25 @@ server   ──X Paseo client/Relay/daemon
 
 密文应覆盖 `serverId`、`relayEndpoint`、`useTls`、`daemonPublicKeyB64`。如果必须去重，使用独立 HMAC fingerprint，不拆出可被日志或查询工具无意暴露的 capability 字段。
 
-### HostGrant
+### HostGrant（审查模型，未启用）
 
-| 字段                            | 说明                           |
-| ------------------------------- | ------------------------------ | ---------------- |
-| `id`                            | 主键                           |
-| `hostId/granteeUserId`          | 唯一关系                       |
-| `role`                          | MVP 仅 `owner`；预留 `operator | viewer` 但不启用 |
-| `createdBy/createdAt/revokedAt` | 授权生命周期                   |
+| 字段                        | 说明                                                     |
+| --------------------------- | -------------------------------------------------------- |
+| `id`                        | ULID 主键                                                |
+| `hostId`                    | `hosts.id` FK                                            |
+| `granteeUserId`             | 被授权用户的 `users.id` FK；按用户 id 绑定，不按邮箱绑定 |
+| `role`                      | 预留 `operator`、`viewer`；当前两个角色都不启用          |
+| `grantedByUserId`           | 创建授权的用户；当前只允许 Host owner                    |
+| `createdAt/expiresAt`       | 创建时间和可选到期时间                                   |
+| `revokedAt/revokedByUserId` | 撤销时间和撤销主体                                       |
 
-`HostGrant` 为未来多人共享保留结构。当前 daemon 协议没有只读或按操作授权，因此 `viewer` 不能在协议能力存在前启用。
+`hosts.ownerUserId` 是唯一的 owner 来源，不为 owner 建立 grant 行。`HostGrant` 只表达 Dashboard 账户之间的授权关系，不保存 pairing offer、HostConnection、daemon credential 或一次性 token。
+
+实现时为 `(hostId, granteeUserId)` 增加“未撤销记录唯一”约束。撤销后保留历史记录，再次授权创建新行。到期由服务端每次鉴权判断，不依赖定时任务。Host 删除或 owner 账户删除时，所有 active grant 都失效。
+
+当前 daemon 没有 per-client credential、命令 scope 或可靠的客户端撤销能力。Dashboard 不能向 `viewer` 返回 HostConnection，因为拿到现有 capability 的用户仍可直接以 daemon operator 身份连接。`operator` 也要等 daemon 提供可撤销、可范围化 credential 后才能启用。
+
+HostGrant 单表不足以接入当前 Host sync。未来实现还需要按用户生成 sync projection 或 outbox，不能复用只支持 owner 的 `hosts.ownerUserId` 和单一 `hosts.lastSyncRevision` 查询。
 
 ### PairingCapability
 

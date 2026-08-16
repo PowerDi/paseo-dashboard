@@ -28,6 +28,17 @@
 
 任何“删除 Host”“撤销 Dashboard 设备”都只能阻止后续同步，不能可靠撤销已下载 capability。
 
+## HostGrant 审查结论
+
+P4.4 只确定模型和边界，不创建表、路由或分享 UI。
+
+- `hosts.ownerUserId` 保持唯一 owner 来源。`admin` 角色是账户管理角色，不自动读取所有 Host，也不自动成为 Host owner。
+- grant 目标使用稳定的 `granteeUserId`，不使用邮箱、邀请 token 或 pairing capability。创建 grant 需要 owner；管理员可执行账户级撤销，但不因此获得 Host capability。
+- `operator` 和 `viewer` 是预留角色。当前 daemon 只要完成 handshake 就拥有 operator capability，Dashboard 无法把返回的 HostConnection 限制成 viewer 或只读操作，因此两个角色都暂不启用。
+- 未来 grant 鉴权必须覆盖 Host list/detail、Host sync、更新、删除和所有会返回 connection 的路径。撤销和到期要在每次请求重新判断，不能只在登录时判断。
+- 撤销只阻止后续 Dashboard 下载和同步，不能撤销已经下载到设备或已完成 pairing 的 daemon capability。真正的 operator/viewer 分享需要 daemon per-client credential、scope 和 revoke 语义。
+- grant 创建、撤销、到期和 owner 删除都要写审计；审计只记录内部 user/host id、role、主体和时间，不记录邮箱、offer 或 connection。
+
 ## Offer 导入安全
 
 1. pairing URL 使用 fragment，浏览器不会在正常 HTTP request 中把 fragment 发给 Dashboard 服务端。
