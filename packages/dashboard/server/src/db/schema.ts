@@ -4,6 +4,9 @@ export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   emailNormalized: text("email_normalized").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
+  role: text("role", { enum: ["admin", "member"] })
+    .notNull()
+    .default("member"),
   status: text("status", { enum: ["active", "locked", "pending_delete"] })
     .notNull()
     .default("active"),
@@ -11,6 +14,19 @@ export const users = sqliteTable("users", {
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
   deletedAt: text("deleted_at"),
+});
+
+export const invitations = sqliteTable("invitations", {
+  id: text("id").primaryKey(),
+  createdByUserId: text("created_by_user_id")
+    .notNull()
+    .references(() => users.id),
+  emailNormalized: text("email_normalized").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  createdAt: text("created_at").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  acceptedAt: text("accepted_at"),
+  revokedAt: text("revoked_at"),
 });
 
 export const devices = sqliteTable(

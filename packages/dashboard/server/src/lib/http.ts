@@ -32,6 +32,10 @@ export function unauthorized(rep: FastifyReply, message = "未授权") {
   return sendError(rep, 401, ErrorCodes.UNAUTHORIZED, message);
 }
 
+export function forbidden(rep: FastifyReply, message = "无权执行此操作") {
+  return sendError(rep, 403, ErrorCodes.FORBIDDEN, message);
+}
+
 export function notFound(rep: FastifyReply, message = "资源不存在") {
   return sendError(rep, 404, ErrorCodes.NOT_FOUND, message);
 }

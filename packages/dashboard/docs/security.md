@@ -77,8 +77,11 @@ MVP 选择 **服务端可解密的 envelope encryption**，原因是账号恢复
 
 ### 选择
 
-- **M1 单用户自托管**：首个用户通过邮箱/用户名 + 密码注册；注册后默认关闭公开注册，由管理员显式开启。
-- **M2/M4**：继续支持邮箱密码；Passkey 作为强认证和无密码登录；OAuth 仅在明确部署需求后增加。
+- 首个有效用户为 `admin`。首用户判定与写入在同一数据库事务中，并发启动只能创建一个管理员。
+- `PASEO_BOARD_REGISTRATION_OPEN` 只控制首用户之后的公开注册。关闭时，admin 可签发绑定邮箱、限时、单次使用的邀请；新用户角色为 `member`。
+- 邀请原始 token 只在创建响应中返回一次，服务端只存哈希。同邮箱重发会撤销之前未使用的邀请。
+- 邮箱验证尚未实现；在完成验证前，邀请的邮箱绑定只约束注册请求，不证明邮箱所有权。
+- 后续继续支持邮箱密码；Passkey 作为强认证和无密码登录；OAuth 仅在明确部署需求后增加。
 - 不把“单用户模式”做成无认证模式。
 
 ### 密码和 session
@@ -97,7 +100,7 @@ MVP 选择 **服务端可解密的 envelope encryption**，原因是账号恢复
 - CORS 默认只允许配置的 Dashboard origin；不使用 `*` 与凭据。
 - CSP 至少限制 `default-src 'self'`、明确 `connect-src` 为 Dashboard API 与用户配置 Relay 所需策略；禁止不受控第三方脚本。
 - 敏感页面设置 `Referrer-Policy: no-referrer`、`Cache-Control: no-store`。
-- 生产日志采用字段 allowlist；错误对象在进入 logger 前做 redaction。
+- 生产日志采用字段 allowlist；错误对象在进入 logger 前做 redaction。`inviteToken` 和邀请创建响应 token 与 access/refresh token 使用相同的脱敏规则。
 - 数据库备份加密、限制访问、验证恢复，并包含密钥版本恢复演练。
 
 ## 撤销和删除
@@ -134,6 +137,7 @@ MVP 选择 **服务端可解密的 envelope encryption**，原因是账号恢复
 - 越权读取/更新/删除其他用户 Host 返回统一 404/403 策略。
 - Host import 的 idempotency key 和 capability fingerprint 只在账号内去重；不同用户的相同值不能复用或暴露其他用户 Host。
 - SSE 只向当前认证用户的订阅发送配置事件。
+- 关闭公开注册时，无邀请注册失败；邀请必须匹配邮箱、未过期、未撤销、未使用，且并发首用户注册只能产生一个管理员。
 - revoked session 无法 refresh、sync 或读取 Host。
 - response/cache/proxy/APM/log fixture 中不存在 capability 原文。
 - 数据库 dump 不能在无 KEK 情况下恢复 connection。

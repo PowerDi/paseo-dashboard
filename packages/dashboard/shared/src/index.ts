@@ -44,6 +44,7 @@ export interface RegisterRequest {
   email: string;
   password: string;
   device: DeviceInfo;
+  inviteToken?: string;
 }
 
 export interface LoginRequest {
@@ -52,9 +53,26 @@ export interface LoginRequest {
   device: DeviceInfo;
 }
 
+export type UserRole = "admin" | "member";
+
 export interface User {
   id: Ulid;
   email: string;
+  role?: UserRole;
+}
+
+export interface CreateInvitationRequest {
+  email: string;
+  expiresInHours?: number;
+}
+
+export interface CreateInvitationResponse {
+  invitation: {
+    id: Ulid;
+    email: string;
+    expiresAt: string;
+  };
+  token: string;
 }
 
 export interface LoginResponse {

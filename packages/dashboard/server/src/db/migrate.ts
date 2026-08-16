@@ -9,12 +9,25 @@ export function ensureTables(dataDir: string) {
       id TEXT PRIMARY KEY,
       email_normalized TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('admin','member')),
       status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','locked','pending_delete')),
       sync_revision INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       deleted_at TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS invitations (
+      id TEXT PRIMARY KEY,
+      created_by_user_id TEXT NOT NULL REFERENCES users(id),
+      email_normalized TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      accepted_at TEXT,
+      revoked_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS invitations_email_idx ON invitations(email_normalized);
 
     CREATE TABLE IF NOT EXISTS devices (
       id TEXT PRIMARY KEY,
@@ -91,6 +104,30 @@ export function ensureTables(dataDir: string) {
     CREATE INDEX IF NOT EXISTS audit_user_idx ON audit_events(user_id);
     CREATE INDEX IF NOT EXISTS audit_type_idx ON audit_events(type);
   `);
+
+  // Idempotent migration: add account roles and preserve an administrator
+  // for existing single-user installations.
+  const userCols = db.pragma("table_info(users)") as Array<{ name: string }>;
+  if (!userCols.some((col) => col.name === "role")) {
+    db.exec(
+      "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('admin','member'))",
+    );
+  }
+  const existingAdmin = db
+    .prepare("SELECT id FROM users WHERE role = 'admin' AND deleted_at IS NULL LIMIT 1")
+    .get();
+  if (!existingAdmin) {
+    db.exec(`
+      UPDATE users
+      SET role = 'admin'
+      WHERE id = (
+        SELECT id FROM users
+        WHERE deleted_at IS NULL
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1
+      )
+    `);
+  }
 
   // Idempotent migration: add created_at column to sessions table.
   const sessionCols = db.pragma("table_info(sessions)") as Array<{ name: string }>;

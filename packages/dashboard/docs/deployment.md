@@ -31,7 +31,7 @@ node server/dist/index.js
 | `PASEO_BOARD_DATA_DIR`          | 是     | `./data`                | 数据目录（SQLite + KEK），应挂载到持久卷      |
 | `PASEO_BOARD_KEK_FILE`          | **是** | 空（开发自动生成）      | 32 字节 KEK 密钥文件路径，权限必须 `0600`     |
 | `PASEO_BOARD_CORS_ORIGIN`       | 否     | `http://localhost:5173` | 前端域名                                      |
-| `PASEO_BOARD_REGISTRATION_OPEN` | 否     | `true`                  | 首用户注册后设 `false` 关闭                   |
+| `PASEO_BOARD_REGISTRATION_OPEN` | 否     | `true`                  | 是否允许首用户之后的公开注册                  |
 | `PASEO_BOARD_LOG_LEVEL`         | 否     | `info`                  | 日志级别                                      |
 | `PASEO_BOARD_TRUSTED_PROXIES`   | 否     | 空                      | 反代 IP，逗号分隔，如 `10.0.0.1,10.0.0.2`     |
 
@@ -116,10 +116,13 @@ server {
 
 ## 5. 注册流程
 
-1. 首次启动，`PASEO_BOARD_REGISTRATION_OPEN` 默认为 `true`
-2. 打开前端页面，注册第一个用户
-3. 设置 `PASEO_BOARD_REGISTRATION_OPEN=false`，重启服务
-4. 后续注册请求被拒绝（已有用户 + 注册关闭）
+1. 第一个成功注册的用户自动成为 `admin`；即使公开注册关闭，空数据库仍允许这次 bootstrap 注册。
+2. `PASEO_BOARD_REGISTRATION_OPEN=true` 时，后续用户可以公开注册，角色为 `member`。
+3. `PASEO_BOARD_REGISTRATION_OPEN=false` 时，后续用户必须提交 admin 创建的邀请 token。
+4. admin 通过 `POST /api/v1/invitations` 提交目标邮箱。响应只返回一次原始 token；当前版本不发送邀请邮件，管理员需通过安全渠道传递 token。
+5. 邀请绑定邮箱、默认 72 小时过期、仅可使用一次。同邮箱重发邀请会立即撤销旧 token。
+
+关闭公开注册不需要为了每次邀请重启服务。修改环境变量本身仍按部署方式重启或滚动更新。
 
 ## 6. 数据备份
 
@@ -145,7 +148,7 @@ server {
 
 - [ ] KEK 文件权限为 `0600`
 - [ ] KEK 与数据库存储在不同位置
-- [ ] `PASEO_BOARD_REGISTRATION_OPEN=false`（首用户注册后）
+- [ ] 按部署策略设置 `PASEO_BOARD_REGISTRATION_OPEN`；关闭时使用 admin 邀请新增用户
 - [ ] 反向代理启用 TLS
 - [ ] 请求体 logging / APM body capture 已关闭
 - [ ] 日志中无 offer/token/connection/cookie/password 原文

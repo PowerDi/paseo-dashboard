@@ -137,14 +137,15 @@ server   ──X Paseo client/Relay/daemon
 
 ### User
 
-| 字段                            | 说明                             |
-| ------------------------------- | -------------------------------- | ------ | --------------- |
-| `id`                            | UUID/ULID 主键                   |
-| `emailNormalized`               | 唯一、明文可查询；显示邮箱可另存 |
-| `passwordHash`                  | Argon2id 输出，敏感但不可逆      |
-| `status`                        | `active                          | locked | pending_delete` |
-| `syncRevision`                  | 账号 Host 同步单调整数           |
-| `createdAt/updatedAt/deletedAt` | 生命周期                         |
+| 字段                            | 说明                                      |
+| ------------------------------- | ----------------------------------------- |
+| `id`                            | UUID/ULID 主键                            |
+| `emailNormalized`               | 唯一、明文可查询；显示邮箱可另存          |
+| `passwordHash`                  | Argon2id 输出，敏感但不可逆               |
+| `role`                          | `admin` 或 `member`；首个有效用户为 admin |
+| `status`                        | `active`、`locked` 或 `pending_delete`    |
+| `syncRevision`                  | 账号 Host 同步单调整数                    |
+| `createdAt/updatedAt/deletedAt` | 生命周期                                  |
 
 第一阶段 Host 归属用户。未来共享不改变 Host 身份，而通过 `HostGrant` 扩展。
 
@@ -171,6 +172,18 @@ server   ──X Paseo client/Relay/daemon
 | `familyId/rotationCounter`       | 重用检测与 token family 撤销        |
 | `expiresAt/lastUsedAt/revokedAt` | 生命周期                            |
 | `ipPrefix/userAgentSummary`      | 限量审计元数据，不存完整敏感 header |
+
+### Invitation
+
+| 字段                   | 说明                                       |
+| ---------------------- | ------------------------------------------ |
+| `id/createdByUserId`   | 主键与创建邀请的管理员                     |
+| `emailNormalized`      | 邀请绑定的邮箱                             |
+| `tokenHash`            | 邀请 token 哈希；原始 token 不持久化       |
+| `createdAt/expiresAt`  | 创建与过期时间                             |
+| `acceptedAt/revokedAt` | 单次消费与撤销状态；同邮箱重发会撤销旧邀请 |
+
+只有 admin 可以创建邀请。邀请关闭公开注册时的注册入口，不改变新用户的 `member` 角色。
 
 ### Host
 
@@ -273,7 +286,8 @@ server   ──X Paseo client/Relay/daemon
 ### 认证
 
 ```http
-POST /api/v1/auth/register
+POST /api/v1/auth/register        # 可带 email-bound inviteToken
+POST /api/v1/invitations             # admin；返回一次性原始 token
 POST /api/v1/auth/login
 POST /api/v1/auth/refresh
 POST /api/v1/auth/logout
@@ -285,11 +299,11 @@ DELETE /api/v1/me
 ```
 
 ```json
-// login request
-{ "email": "user@example.com", "password": "...", "device": { "installationId": "dev_...", "name": "Chrome on Laptop", "platform": "web" } }
+// register request；公开注册关闭时必须带管理员签发的 inviteToken
+{ "email": "user@example.com", "password": "...", "device": { "installationId": "dev_...", "name": "Chrome on Laptop", "platform": "web" }, "inviteToken": "..." }
 
 // login response body; Web 的 refresh credential 使用 HttpOnly Cookie
-{ "user": { "id": "usr_...", "email": "user@example.com" }, "deviceId": "dev_...", "accessToken": "opaque-or-jwt", "expiresIn": 900 }
+{ "user": { "id": "usr_...", "email": "user@example.com", "role": "member" }, "deviceId": "dev_...", "accessToken": "opaque-or-jwt", "expiresIn": 900 }
 ```
 
 Web 可选择完全 Cookie session；Harmony 使用 bearer access token 和一次性 refresh token。两种 transport profile 调用同一 endpoint、返回同一业务对象。不得把 refresh token 放 URL。

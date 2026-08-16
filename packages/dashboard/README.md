@@ -50,10 +50,10 @@ npm run typecheck:dashboard
 | `PASEO_BOARD_DATA_DIR`          | `./data`                | 数据目录（SQLite + KEK）         |
 | `PASEO_BOARD_KEK_FILE`          | 空（开发自动生成）      | 生产必须指定外部 32 字节密钥文件 |
 | `PASEO_BOARD_CORS_ORIGIN`       | `http://localhost:5173` | CORS 允许来源                    |
-| `PASEO_BOARD_REGISTRATION_OPEN` | `true`                  | 注册开关，首用户后设 `false`     |
+| `PASEO_BOARD_REGISTRATION_OPEN` | `true`                  | 是否允许首用户之后的公开注册     |
 
 ## 当前状态
 
-M1 完成：用户认证、Host 生命周期、加密存储、审计。Agent 面板（M3）待实现。
+M3 已完成，P4.1 多用户安全进行中：租户隔离与 admin 邀请注册已落地，邮箱验证和 abuse tests 待完成。
 
 详见 `docs/progress.md`。

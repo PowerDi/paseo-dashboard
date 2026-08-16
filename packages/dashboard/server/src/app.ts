@@ -13,6 +13,7 @@ import { registerDeviceRoutes } from "./routes/devices.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
 import { registerEventRoutes } from "./routes/events.js";
 import { registerAuditRoutes } from "./routes/audit.js";
+import { registerInvitationRoutes } from "./routes/invitations.js";
 import { ConfigEventBus } from "./lib/event-bus.js";
 import { setupSecurity } from "./lib/security.js";
 import type { ServerConfig } from "./config.js";
@@ -55,6 +56,7 @@ export function buildApp(config: ServerConfig) {
           "req.body.currentPassword",
           "req.body.newPassword",
           "req.body.refreshToken",
+          "req.body.inviteToken",
           "req.body.token",
           "req.body.resetToken",
           "req.body.connection",
@@ -62,6 +64,7 @@ export function buildApp(config: ServerConfig) {
           "res.body.connection",
           "res.body.accessToken",
           "res.body.refreshToken",
+          "res.body.token",
         ],
         censor: "[REDACTED]",
       },
@@ -108,6 +111,7 @@ export function buildApp(config: ServerConfig) {
   // Routes
   app.get("/health", async () => ({ status: "ok", version: "0.1.0" }));
   registerAuthRoutes(app, db, config);
+  registerInvitationRoutes(app, db);
   const eventBus = new ConfigEventBus();
   app.decorate("eventBus", eventBus);
   registerEventRoutes(app, db, eventBus);

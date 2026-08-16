@@ -11,8 +11,8 @@ export interface ServerConfig {
   argon2MemoryCost: number; // KiB
   argon2TimeCost: number; // iterations
   argon2Parallelism: number; // threads
-  registrationOpen: boolean;
-  rateLimitEnabled: boolean; // 首用户注册后自动关闭
+  registrationOpen: boolean; // 是否允许首用户之后的公开注册
+  rateLimitEnabled: boolean;
   trustedProxies: string[];
 }
 

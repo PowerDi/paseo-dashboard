@@ -1,5 +1,6 @@
+import type { UserRole } from "@getpaseo/dashboard-shared";
 import type { FastifyInstance } from "fastify";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, gt, isNull } from "drizzle-orm";
 import argon2 from "argon2";
 import { newId } from "../lib/id.js";
 import {
@@ -14,10 +15,16 @@ import {
   SESSION_COOKIE,
 } from "../lib/auth.js";
 import { badRequest, unauthorized, notFound } from "../lib/http.js";
-import { users, devices, sessions, auditEvents } from "../db/schema.js";
+import { users, devices, sessions, invitations, auditEvents } from "../db/schema.js";
 import { truncateIp } from "../app.js";
 import type { Db } from "../db/index.js";
 import type { ServerConfig } from "../config.js";
+
+class EmailAlreadyRegisteredError extends Error {}
+class InvitationUnavailableError extends Error {}
+class RegistrationClosedError extends Error {}
+
+type RegistrationMethod = "bootstrap" | "invitation" | "public";
 
 export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerConfig) {
   const auth = requireAuth(db);
@@ -73,10 +80,11 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
 
   // ── POST /api/v1/auth/register ──────────────────────
   app.post("/api/v1/auth/register", async (req, rep) => {
-    const { email, password, device } = req.body as {
+    const { email, password, device, inviteToken } = req.body as {
       email: string;
       password: string;
       device: { installationId: string; name: string; platform: string };
+      inviteToken?: string;
     };
 
     if (!email || !password || !device?.installationId) {
@@ -84,12 +92,6 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
     }
     if (password.length < 8) {
       return badRequest(rep, "密码长度至少 8 位");
-    }
-
-    // Registration gate: close after first user
-    const userCount = await db.select().from(users).where(isNull(users.deletedAt));
-    if (userCount.length > 0 && !config.registrationOpen) {
-      return badRequest(rep, "注册已关闭");
     }
 
     const normalized = email.toLowerCase().trim();
@@ -104,7 +106,38 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
     }
 
     const now = nowIso();
+    let invitationId: string | null = null;
+
+    if (inviteToken !== undefined) {
+      if (typeof inviteToken !== "string" || !/^[a-f0-9]{64}$/.test(inviteToken)) {
+        return badRequest(rep, "邀请无效或已过期");
+      }
+      const invitationRows = await db
+        .select({ id: invitations.id })
+        .from(invitations)
+        .where(
+          and(
+            eq(invitations.tokenHash, hashToken(inviteToken)),
+            eq(invitations.emailNormalized, normalized),
+            isNull(invitations.acceptedAt),
+            isNull(invitations.revokedAt),
+            gt(invitations.expiresAt, now),
+          ),
+        )
+        .limit(1);
+      if (invitationRows.length === 0) return badRequest(rep, "邀请无效或已过期");
+      invitationId = invitationRows[0].id;
+    } else if (!config.registrationOpen) {
+      const existingUser = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(isNull(users.deletedAt))
+        .limit(1);
+      if (existingUser.length > 0) return badRequest(rep, "注册已关闭");
+    }
+
     const userId = newId("usr");
+    const deviceId = newId("dev");
     const passwordHash = await argon2.hash(password, {
       type: argon2.argon2id,
       memoryCost: config.argon2MemoryCost,
@@ -112,42 +145,105 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
       parallelism: config.argon2Parallelism,
     });
 
-    await db.insert(users).values({
-      id: userId,
-      emailNormalized: normalized,
-      passwordHash,
-      status: "active",
-      syncRevision: 0,
-      createdAt: now,
-      updatedAt: now,
-    });
+    let role: UserRole;
+    try {
+      role = db.transaction(
+        (tx): UserRole => {
+          const existingUser = tx
+            .select({ id: users.id })
+            .from(users)
+            .where(and(eq(users.emailNormalized, normalized), isNull(users.deletedAt)))
+            .limit(1)
+            .get();
+          if (existingUser) throw new EmailAlreadyRegisteredError();
 
-    // Device
-    const deviceId = newId("dev");
-    await db.insert(devices).values({
-      id: deviceId,
-      userId,
-      installationIdHash: hashToken(device.installationId),
-      displayName: device.name || "未知设备",
-      platform: device.platform || "unknown",
-      firstSeenAt: now,
-      lastSeenAt: now,
-    });
+          const hasUsers = Boolean(
+            tx.select({ id: users.id }).from(users).where(isNull(users.deletedAt)).limit(1).get(),
+          );
+          if (!invitationId && hasUsers && !config.registrationOpen) {
+            throw new RegistrationClosedError();
+          }
+
+          if (invitationId) {
+            const consumed = tx
+              .update(invitations)
+              .set({ acceptedAt: now })
+              .where(
+                and(
+                  eq(invitations.id, invitationId),
+                  eq(invitations.emailNormalized, normalized),
+                  isNull(invitations.acceptedAt),
+                  isNull(invitations.revokedAt),
+                  gt(invitations.expiresAt, now),
+                ),
+              )
+              .run();
+            if (consumed.changes !== 1) throw new InvitationUnavailableError();
+          }
+
+          const assignedRole: UserRole = hasUsers ? "member" : "admin";
+          tx.insert(users)
+            .values({
+              id: userId,
+              emailNormalized: normalized,
+              passwordHash,
+              role: assignedRole,
+              status: "active",
+              syncRevision: 0,
+              createdAt: now,
+              updatedAt: now,
+            })
+            .run();
+          tx.insert(devices)
+            .values({
+              id: deviceId,
+              userId,
+              installationIdHash: hashToken(device.installationId),
+              displayName: device.name || "未知设备",
+              platform: device.platform || "unknown",
+              firstSeenAt: now,
+              lastSeenAt: now,
+            })
+            .run();
+          let registration: RegistrationMethod = "public";
+          if (invitationId) registration = "invitation";
+          else if (assignedRole === "admin") registration = "bootstrap";
+
+          tx.insert(auditEvents)
+            .values({
+              id: newId("aud"),
+              userId,
+              type: "user.registered",
+              targetType: "user",
+              targetId: userId,
+              metadata: JSON.stringify({
+                registration,
+                ...(invitationId ? { invitationId } : {}),
+              }),
+              createdAt: now,
+            })
+            .run();
+          return assignedRole;
+        },
+        { behavior: "immediate" },
+      );
+    } catch (error) {
+      if (error instanceof EmailAlreadyRegisteredError) {
+        return badRequest(rep, "该邮箱已被注册", { code: "email_exists" });
+      }
+      if (error instanceof InvitationUnavailableError) {
+        return badRequest(rep, "邀请无效或已过期");
+      }
+      if (error instanceof RegistrationClosedError) {
+        return badRequest(rep, "注册已关闭");
+      }
+      throw error;
+    }
 
     const { accessToken, refreshToken } = await createSession(userId, deviceId, req, rep);
 
-    await db.insert(auditEvents).values({
-      id: newId("aud"),
-      userId,
-      type: "user.registered",
-      targetType: "user",
-      targetId: userId,
-      metadata: JSON.stringify({}),
-      createdAt: now,
-    });
-
     return {
-      user: { id: userId, email: normalized },
+      user: { id: userId, email: normalized, role },
       deviceId,
       accessToken,
       refreshToken,
@@ -256,7 +352,7 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
     });
 
     return {
-      user: { id: user.id, email: normalized },
+      user: { id: user.id, email: normalized, role: user.role },
       deviceId,
       accessToken,
       refreshToken,
@@ -443,6 +539,12 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
     const userRows = await db.select().from(users).where(eq(users.id, req.auth!.userId)).limit(1);
     if (userRows.length === 0) return notFound(rep, "用户不存在");
     rep.header("Cache-Control", "no-store");
-    return { user: { id: userRows[0].id, email: userRows[0].emailNormalized } };
+    return {
+      user: {
+        id: userRows[0].id,
+        email: userRows[0].emailNormalized,
+        role: userRows[0].role,
+      },
+    };
   });
 }

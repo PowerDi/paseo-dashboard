@@ -391,7 +391,7 @@
 
 **任务**
 
-1. 开放注册/邀请、邮箱验证、管理员策略。
+1. **进行中**：开放注册、admin/member 角色与 admin 邀请已完成；邮箱验证待实现。邀请绑定邮箱、限时、单次使用，服务端只存 token 哈希。
 2. ~~租户隔离：所有 Host/API 的越权测试覆盖。~~ **完成**：Host import/list/update/delete、Host sync、Session、Device、SSE 和审计均有跨用户合同；认证边界额外拒绝 locked/deleted user、revoked device 和 session/device 所属不一致。
 3. 注册/登录/重置/导入 abuse tests。
 
