@@ -403,20 +403,23 @@
 
 - 任何用户不能读取/修改其他用户 Host。
 
-### P4.2 强认证与风险提示
+### P4.2 强认证与风险提示（部分完成）
 
 **任务**
 
-1. Passkey 支持（WebAuthn）。
-2. 风险登录提示、精细 session/device 审计。
+1. **完成**：Web Passkey/WebAuthn 注册、登录、列表和删除；密码登录继续保留。
+2. **完成**：session/device 保存截断 IP、User-Agent 摘要和认证方式，并在设备页展示。
+3. **暂缓**：风险登录和新设备提示。2026-08-16 按用户决定不进入当前实现。
 
 **产出**
 
-- Passkey 登录流程与审计增强。
+- discoverable Passkey 登录、当前密码保护的注册流程、credential 管理和审计增强。
+- session/device 登录环境审计。
 
 **验证**
 
-- Passkey 与密码登录共存且各自有负向测试。
+- Passkey 与密码登录共存；真实 P-256 assertion、错误密码、错误 origin、跨 session challenge、重放和跨用户删除均有合同测试。
+- Passkey ceremony 有独立 IP/credential 限流测试。
 
 ### P4.3 生产密钥管理
 

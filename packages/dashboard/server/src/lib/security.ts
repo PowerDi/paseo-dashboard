@@ -22,6 +22,10 @@ const DEFAULT_RATE_LIMITS = {
   "auth.refresh.ip": { maxRequests: 20, windowMs: 60_000 },
   "auth.refresh.credential": { maxRequests: 10, windowMs: 60_000 },
   "auth.change-password.ip": { maxRequests: 5, windowMs: 60_000 },
+  "auth.passkey.options.ip": { maxRequests: 20, windowMs: 60_000 },
+  "auth.passkey.verify.ip": { maxRequests: 10, windowMs: 60_000 },
+  "auth.passkey.verify.credential": { maxRequests: 5, windowMs: 60_000 },
+  "passkey.registration.ip": { maxRequests: 10, windowMs: 60_000 },
   "host.import.ip": { maxRequests: 20, windowMs: 60_000 },
   "host.import.account": { maxRequests: 10, windowMs: 60_000 },
 } as const satisfies Record<string, RateLimitConfig>;
@@ -33,6 +37,7 @@ interface RouteRateLimitPolicy {
   account?: RateLimitScope;
   device?: RateLimitScope;
   credential?: RateLimitScope;
+  passkeyCredential?: RateLimitScope;
 }
 
 const RATE_LIMIT_ROUTES: Record<string, RouteRateLimitPolicy> = {
@@ -51,6 +56,13 @@ const RATE_LIMIT_ROUTES: Record<string, RouteRateLimitPolicy> = {
     credential: "auth.refresh.credential",
   },
   "POST:/api/v1/auth/change-password": { ip: "auth.change-password.ip" },
+  "POST:/api/v1/auth/passkey/login/options": { ip: "auth.passkey.options.ip" },
+  "POST:/api/v1/auth/passkey/login/verify": {
+    ip: "auth.passkey.verify.ip",
+    passkeyCredential: "auth.passkey.verify.credential",
+  },
+  "POST:/api/v1/passkeys/registration/options": { ip: "passkey.registration.ip" },
+  "POST:/api/v1/passkeys/registration/verify": { ip: "passkey.registration.ip" },
   "POST:/api/v1/hosts/import": { ip: "host.import.ip" },
 };
 
@@ -136,6 +148,13 @@ function bodyLimitExceeded(
 
   if (policy.credential && typeof body.refreshToken === "string" && body.refreshToken) {
     if (!rateLimits.check(policy.credential, body.refreshToken)) return true;
+  }
+
+  if (policy.passkeyCredential) {
+    const response = requestBody(body.response);
+    if (typeof response?.id === "string" && response.id) {
+      if (!rateLimits.check(policy.passkeyCredential, response.id)) return true;
+    }
   }
 
   return false;

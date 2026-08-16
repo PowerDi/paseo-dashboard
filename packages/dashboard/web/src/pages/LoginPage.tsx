@@ -1,4 +1,5 @@
-import { LoaderCircle } from "lucide-react";
+import { KeyRound, LoaderCircle } from "lucide-react";
+import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -13,10 +14,12 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [passkeySubmitting, setPasskeySubmitting] = useState(false);
+  const passkeySupported = browserSupportsWebAuthn();
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (submitting) return;
+    if (submitting || passkeySubmitting) return;
     setError(null);
     setSubmitting(true);
     try {
@@ -27,6 +30,19 @@ export function LoginPage() {
       setError(cause instanceof Error ? cause.message : t("login.failed"));
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handlePasskeyLogin() {
+    if (submitting || passkeySubmitting) return;
+    setError(null);
+    setPasskeySubmitting(true);
+    try {
+      await useAppStore.getState().loginWithPasskey();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("login.passkeyFailed"));
+    } finally {
+      setPasskeySubmitting(false);
     }
   }
 
@@ -52,7 +68,7 @@ export function LoginPage() {
             <input
               autoComplete="email"
               className={inputClassName}
-              disabled={submitting}
+              disabled={submitting || passkeySubmitting}
               required
               type="email"
               value={email}
@@ -66,7 +82,7 @@ export function LoginPage() {
             <input
               autoComplete={mode === "login" ? "current-password" : "new-password"}
               className={inputClassName}
-              disabled={submitting}
+              disabled={submitting || passkeySubmitting}
               minLength={8}
               required
               type="password"
@@ -81,11 +97,35 @@ export function LoginPage() {
             </p>
           )}
 
-          <Button className="w-full" disabled={submitting} type="submit">
+          <Button className="w-full" disabled={submitting || passkeySubmitting} type="submit">
             {submitting && <LoaderCircle className="animate-spin" size={14} />}
             {mode === "login" ? t("login.signIn") : t("login.createAccount")}
           </Button>
         </form>
+
+        {mode === "login" && passkeySupported && (
+          <div className="mt-4 w-full">
+            <div className="mb-4 flex items-center gap-3 text-[11px] text-[var(--foreground-faint)]">
+              <span className="h-px flex-1 bg-[var(--border)]" />
+              {t("login.or")}
+              <span className="h-px flex-1 bg-[var(--border)]" />
+            </div>
+            <Button
+              className="w-full"
+              disabled={submitting || passkeySubmitting}
+              type="button"
+              variant="outline"
+              onClick={() => void handlePasskeyLogin()}
+            >
+              {passkeySubmitting ? (
+                <LoaderCircle className="animate-spin" size={14} />
+              ) : (
+                <KeyRound size={14} />
+              )}
+              {t("login.usePasskey")}
+            </Button>
+          </div>
+        )}
 
         <button
           className="mt-6 cursor-pointer text-[13px] text-[var(--foreground-subtle)] transition-colors hover:text-[var(--foreground-muted)]"

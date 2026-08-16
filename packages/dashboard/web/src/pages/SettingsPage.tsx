@@ -1,16 +1,34 @@
-import { Check, LoaderCircle, LockKeyhole, RefreshCw, Eye, EyeOff } from "lucide-react";
-import { useState } from "react";
+import {
+  Check,
+  Eye,
+  EyeOff,
+  KeyRound,
+  LoaderCircle,
+  LockKeyhole,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
+import type { Passkey } from "@getpaseo/dashboard-shared";
+import { browserSupportsWebAuthn, startRegistration } from "@simplewebauthn/browser";
+import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { SectionLabel } from "@/components/section-label";
 import { Button } from "@/components/ui/button";
 import { SUPPORTED_LANGUAGES } from "@/i18n";
+import { formatRelativeTime } from "@/lib/format-time";
 import { revealDelay, useReveal } from "@/lib/use-reveal";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
 import { useThemeStore } from "@/stores/theme-store";
 import { useHostSyncStore } from "@/stores/host-sync-store";
-import { changePassword } from "@/api/dashboardApi";
+import {
+  beginPasskeyRegistration,
+  changePassword,
+  deletePasskey,
+  finishPasskeyRegistration,
+  listPasskeys,
+} from "@/api/dashboardApi";
 
 function SettingRow({
   title,
@@ -209,6 +227,159 @@ function ChangePasswordSection() {
   );
 }
 
+function PasskeySection() {
+  const { t, i18n } = useTranslation();
+  const [passkeys, setPasskeys] = useState<Passkey[] | null>(null);
+  const [name, setName] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const supported = browserSupportsWebAuthn();
+
+  const load = useCallback(async () => {
+    try {
+      setPasskeys(await listPasskeys());
+    } catch (cause) {
+      setPasskeys([]);
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function handleAdd(event: React.FormEvent) {
+    event.preventDefault();
+    if (!supported || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const ceremony = await beginPasskeyRegistration(currentPassword);
+      const response = await startRegistration({ optionsJSON: ceremony.options });
+      const result = await finishPasskeyRegistration(ceremony.ceremonyId, response, name);
+      setPasskeys((current) => [result.passkey, ...(current ?? [])]);
+      setName("");
+      setCurrentPassword("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("settings.passkeys.addFailed"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDelete(passkeyId: string) {
+    if (deletingId) return;
+    setDeletingId(passkeyId);
+    setError(null);
+    try {
+      await deletePasskey(passkeyId);
+      setPasskeys((current) => current?.filter((passkey) => passkey.id !== passkeyId) ?? []);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("settings.passkeys.deleteFailed"));
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  const inputClassName =
+    "min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--foreground-muted)] disabled:opacity-50";
+
+  return (
+    <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)]">
+      <div className="dashboard-list-row border-b border-[var(--border)]">
+        <KeyRound size={16} className="shrink-0 text-[var(--foreground-subtle)]" />
+        <div className="dashboard-row-copy">
+          <span className="dashboard-row-title">{t("settings.passkeys.title")}</span>
+          <span className="dashboard-row-description">
+            {supported ? t("settings.passkeys.hint") : t("settings.passkeys.unsupported")}
+          </span>
+        </div>
+      </div>
+
+      {passkeys === null ? (
+        <div className="flex items-center justify-center gap-2 px-4 py-6 text-[13px] text-[var(--foreground-faint)]">
+          <LoaderCircle className="animate-spin" size={14} />
+          {t("common.loading")}
+        </div>
+      ) : passkeys.length === 0 ? (
+        <p className="px-4 py-4 text-[13px] text-[var(--foreground-subtle)]">
+          {t("settings.passkeys.empty")}
+        </p>
+      ) : (
+        passkeys.map((passkey) => (
+          <div
+            key={passkey.id}
+            className="dashboard-list-row border-t border-[var(--border)] first:border-t-0"
+          >
+            <div className="dashboard-row-copy">
+              <span className="dashboard-row-title">{passkey.name}</span>
+              <span className="dashboard-row-description">
+                {t("settings.passkeys.meta", {
+                  type: t(`settings.passkeys.deviceType.${passkey.deviceType}`),
+                  backup: passkey.backedUp
+                    ? t("settings.passkeys.backedUp")
+                    : t("settings.passkeys.notBackedUp"),
+                  createdAt: formatRelativeTime(passkey.createdAt, i18n.language),
+                  lastUsedAt: passkey.lastUsedAt
+                    ? formatRelativeTime(passkey.lastUsedAt, i18n.language)
+                    : t("settings.passkeys.neverUsed"),
+                })}
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-[var(--foreground-muted)] hover:text-[var(--danger)]"
+              disabled={deletingId !== null}
+              title={t("settings.passkeys.delete")}
+              onClick={() => void handleDelete(passkey.id)}
+            >
+              {deletingId === passkey.id ? (
+                <LoaderCircle className="animate-spin" size={14} />
+              ) : (
+                <Trash2 size={14} />
+              )}
+            </Button>
+          </div>
+        ))
+      )}
+
+      <form
+        className="flex flex-col gap-3 border-t border-[var(--border)] bg-[var(--surface-soft)] px-4 py-4"
+        onSubmit={handleAdd}
+      >
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            className={inputClassName}
+            disabled={!supported || submitting}
+            maxLength={80}
+            placeholder={t("settings.passkeys.namePlaceholder")}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+          <input
+            autoComplete="current-password"
+            className={inputClassName}
+            disabled={!supported || submitting}
+            placeholder={t("settings.passkeys.currentPassword")}
+            required
+            type="password"
+            value={currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+          />
+          <Button disabled={!supported || submitting} size="sm" type="submit">
+            {submitting && <LoaderCircle className="animate-spin" size={14} />}
+            {t("settings.passkeys.add")}
+          </Button>
+        </div>
+        {error && <p className="text-[13px] text-[var(--danger)]">{error}</p>}
+      </form>
+    </div>
+  );
+}
+
 export function SettingsPage() {
   const { t, i18n } = useTranslation();
   const user = useAppStore((state) => state.user);
@@ -280,10 +451,14 @@ export function SettingsPage() {
             <ChangePasswordSection />
           </div>
 
-          <div className="mt-8">
-            <SectionLabel style={revealDelay(7)}>{t("settings.sync")}</SectionLabel>
+          <div className="mt-4" data-reveal="" style={revealDelay(7)}>
+            <PasskeySection />
           </div>
-          <div data-reveal="" style={revealDelay(8)}>
+
+          <div className="mt-8">
+            <SectionLabel style={revealDelay(8)}>{t("settings.sync")}</SectionLabel>
+          </div>
+          <div data-reveal="" style={revealDelay(9)}>
             <SettingRow
               title={t("settings.lastSyncRevision")}
               description={

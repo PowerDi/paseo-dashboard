@@ -24,17 +24,20 @@ node server/dist/index.js
 
 ## 2. 环境变量
 
-| 变量                             | 必填   | 默认值                  | 说明                                          |
-| -------------------------------- | ------ | ----------------------- | --------------------------------------------- |
-| `PASEO_BOARD_HOST`               | 否     | `127.0.0.1`             | 监听地址，生产应设为 `0.0.0.0` 或反代后端地址 |
-| `PASEO_BOARD_PORT`               | 否     | `3000`                  | 监听端口                                      |
-| `PASEO_BOARD_DATA_DIR`           | 是     | `./data`                | 数据目录（SQLite + KEK），应挂载到持久卷      |
-| `PASEO_BOARD_KEK_FILE`           | **是** | 空（开发自动生成）      | 32 字节 KEK 密钥文件路径，权限必须 `0600`     |
-| `PASEO_BOARD_CORS_ORIGIN`        | 否     | `http://localhost:5173` | 前端域名                                      |
-| `PASEO_BOARD_REGISTRATION_OPEN`  | 否     | `true`                  | 是否允许首用户之后的公开注册                  |
-| `PASEO_BOARD_LOG_LEVEL`          | 否     | `info`                  | 日志级别                                      |
-| `PASEO_BOARD_RATE_LIMIT_ENABLED` | 否     | `true`                  | 是否启用内存限流；生产不要关闭                |
-| `PASEO_BOARD_TRUSTED_PROXIES`    | 否     | 空                      | 反代 IP，逗号分隔，如 `10.0.0.1,10.0.0.2`     |
+| 变量                             | 必填   | 默认值                      | 说明                                                  |
+| -------------------------------- | ------ | --------------------------- | ----------------------------------------------------- |
+| `PASEO_BOARD_HOST`               | 否     | `127.0.0.1`                 | 监听地址，生产应设为 `0.0.0.0` 或反代后端地址         |
+| `PASEO_BOARD_PORT`               | 否     | `3000`                      | 监听端口                                              |
+| `PASEO_BOARD_DATA_DIR`           | 是     | `./data`                    | 数据目录（SQLite + KEK），应挂载到持久卷              |
+| `PASEO_BOARD_KEK_FILE`           | **是** | 空（开发自动生成）          | 32 字节 KEK 密钥文件路径，权限必须 `0600`             |
+| `PASEO_BOARD_CORS_ORIGIN`        | 否     | `http://localhost:5173`     | 前端域名                                              |
+| `PASEO_BOARD_REGISTRATION_OPEN`  | 否     | `true`                      | 是否允许首用户之后的公开注册                          |
+| `PASEO_BOARD_LOG_LEVEL`          | 否     | `info`                      | 日志级别                                              |
+| `PASEO_BOARD_RATE_LIMIT_ENABLED` | 否     | `true`                      | 是否启用内存限流；生产不要关闭                        |
+| `PASEO_BOARD_TRUSTED_PROXIES`    | 否     | 空                          | 反代 IP，逗号分隔，如 `10.0.0.1,10.0.0.2`             |
+| `PASEO_BOARD_WEBAUTHN_ORIGIN`    | 否     | 与 CORS origin 相同         | WebAuthn 页面 origin，例如 `https://dash.example.com` |
+| `PASEO_BOARD_WEBAUTHN_RP_ID`     | 否     | WebAuthn origin 的 hostname | WebAuthn RP ID，例如 `dash.example.com`               |
+| `PASEO_BOARD_WEBAUTHN_RP_NAME`   | 否     | `Paseo Dashboard`           | 浏览器 Passkey 提示中显示的服务名                     |
 
 ## 3. KEK 管理
 
@@ -153,6 +156,7 @@ server {
 - [ ] KEK 与数据库存储在不同位置
 - [ ] 按部署策略设置 `PASEO_BOARD_REGISTRATION_OPEN`；关闭时使用 admin 邀请新增用户
 - [ ] 反向代理启用 TLS
+- [ ] WebAuthn origin/RP ID 与浏览器实际 HTTPS 域名一致
 - [ ] `PASEO_BOARD_RATE_LIMIT_ENABLED=true`，trusted proxy 只包含实际反代
 - [ ] 请求体 logging / APM body capture 已关闭
 - [ ] 日志中无 offer/token/connection/cookie/password 原文

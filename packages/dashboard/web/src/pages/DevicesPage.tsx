@@ -105,6 +105,15 @@ export function DevicesPage() {
                           lastSeen: formatRelativeTime(device.lastSeenAt, i18n.language),
                         })}
                       </span>
+                      <span className="dashboard-row-description">
+                        {t("devices.environmentMeta", {
+                          authMethod: device.lastAuthMethod
+                            ? t(`devices.authMethod.${device.lastAuthMethod}`)
+                            : t("devices.unknown"),
+                          ipPrefix: device.lastIpPrefix ?? t("devices.unknown"),
+                          userAgent: device.lastUserAgentSummary ?? t("devices.unknown"),
+                        })}
+                      </span>
                     </div>
                     {!device.isCurrentDevice && !device.revokedAt && (
                       <Button
@@ -146,6 +155,13 @@ export function DevicesPage() {
                         {t("devices.sessionMeta", {
                           createdAt: formatRelativeTime(session.createdAt, i18n.language),
                           lastUsedAt: formatRelativeTime(session.lastUsedAt, i18n.language),
+                        })}
+                      </span>
+                      <span className="dashboard-row-description">
+                        {t("devices.environmentMeta", {
+                          authMethod: t(`devices.authMethod.${session.authMethod}`),
+                          ipPrefix: session.ipPrefix ?? t("devices.unknown"),
+                          userAgent: session.userAgentSummary ?? t("devices.unknown"),
                         })}
                       </span>
                     </div>

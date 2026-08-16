@@ -16,7 +16,8 @@ import {
 } from "../lib/auth.js";
 import { badRequest, unauthorized, notFound } from "../lib/http.js";
 import { users, devices, sessions, invitations, auditEvents } from "../db/schema.js";
-import { truncateIp } from "../app.js";
+import { issueSession } from "../lib/session.js";
+import { requestEnvironment } from "../lib/session-environment.js";
 import type { Db } from "../db/index.js";
 import type { ServerConfig } from "../config.js";
 
@@ -29,10 +30,6 @@ type RegistrationMethod = "bootstrap" | "invitation" | "public";
 export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerConfig) {
   const auth = requireAuth(db);
 
-  function setAccessCookie(rep: import("fastify").FastifyReply, token: string) {
-    rep.setCookie(SESSION_COOKIE, token, cookieOptions(config.accessTokenTtl));
-  }
-
   function nowIso(): string {
     return new Date().toISOString();
   }
@@ -43,39 +40,6 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
 
   function refreshExpiry(): string {
     return new Date(Date.now() + config.refreshTokenTtl * 1000).toISOString();
-  }
-
-  async function createSession(
-    userId: string,
-    deviceId: string,
-    req: import("fastify").FastifyRequest,
-    rep: import("fastify").FastifyReply,
-  ) {
-    const accessToken = newToken();
-    const refreshToken = newToken(config.refreshTokenBytes);
-    const familyId = newId("fam");
-    const sessionId = newId("ses");
-    const now = nowIso();
-
-    await db.insert(sessions).values({
-      id: sessionId,
-      userId,
-      deviceId,
-      accessTokenHash: hashToken(accessToken),
-      refreshTokenHash: hashToken(refreshToken),
-      familyId,
-      rotationCounter: 0,
-      createdAt: now,
-      expiresAt: accessExpiry(),
-      refreshExpiresAt: refreshExpiry(),
-      lastUsedAt: now,
-      ipPrefix: truncateIp(req.ip),
-    });
-
-    setAccessCookie(rep, accessToken);
-    rep.header("Cache-Control", "no-store");
-
-    return { accessToken, refreshToken, sessionId };
   }
 
   // ── POST /api/v1/auth/register ──────────────────────
@@ -106,6 +70,7 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
     }
 
     const now = nowIso();
+    const environment = requestEnvironment(req);
     let invitationId: string | null = null;
 
     if (inviteToken !== undefined) {
@@ -203,6 +168,9 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
               platform: device.platform || "unknown",
               firstSeenAt: now,
               lastSeenAt: now,
+              lastIpPrefix: environment.ipPrefix,
+              lastUserAgentSummary: environment.userAgentSummary,
+              lastAuthMethod: "password",
             })
             .run();
           let registration: RegistrationMethod = "public";
@@ -218,6 +186,9 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
               targetId: userId,
               metadata: JSON.stringify({
                 registration,
+                authMethod: "password",
+                ipPrefix: environment.ipPrefix,
+                userAgentSummary: environment.userAgentSummary,
                 ...(invitationId ? { invitationId } : {}),
               }),
               createdAt: now,
@@ -240,7 +211,15 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
       throw error;
     }
 
-    const { accessToken, refreshToken } = await createSession(userId, deviceId, req, rep);
+    const { accessToken, refreshToken } = await issueSession(
+      db,
+      config,
+      userId,
+      deviceId,
+      "password",
+      req,
+      rep,
+    );
 
     return {
       user: { id: userId, email: normalized, role },
@@ -305,6 +284,7 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
     }
 
     const instHash = hashToken(device.installationId);
+    const environment = requestEnvironment(req);
 
     // Create or update device
     const existingDevices = await db
@@ -320,14 +300,23 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
       .limit(1);
 
     let deviceId: string;
+    let newDevice = false;
     if (existingDevices.length > 0) {
       deviceId = existingDevices[0].id;
       await db
         .update(devices)
-        .set({ lastSeenAt: now, displayName: device.name || existingDevices[0].displayName })
+        .set({
+          lastSeenAt: now,
+          displayName: device.name || existingDevices[0].displayName,
+          platform: device.platform || existingDevices[0].platform,
+          lastIpPrefix: environment.ipPrefix,
+          lastUserAgentSummary: environment.userAgentSummary,
+          lastAuthMethod: "password",
+        })
         .where(eq(devices.id, deviceId));
     } else {
       deviceId = newId("dev");
+      newDevice = true;
       await db.insert(devices).values({
         id: deviceId,
         userId: user.id,
@@ -336,10 +325,21 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
         platform: device.platform || "unknown",
         firstSeenAt: now,
         lastSeenAt: now,
+        lastIpPrefix: environment.ipPrefix,
+        lastUserAgentSummary: environment.userAgentSummary,
+        lastAuthMethod: "password",
       });
     }
 
-    const { accessToken, refreshToken } = await createSession(user.id, deviceId, req, rep);
+    const { accessToken, refreshToken, sessionId } = await issueSession(
+      db,
+      config,
+      user.id,
+      deviceId,
+      "password",
+      req,
+      rep,
+    );
 
     await db.insert(auditEvents).values({
       id: newId("aud"),
@@ -347,7 +347,14 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
       type: "user.login",
       targetType: "user",
       targetId: user.id,
-      metadata: JSON.stringify({}),
+      metadata: JSON.stringify({
+        authMethod: "password",
+        sessionId,
+        deviceId,
+        newDevice,
+        ipPrefix: environment.ipPrefix,
+        userAgentSummary: environment.userAgentSummary,
+      }),
       createdAt: now,
     });
 
@@ -407,6 +414,7 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
     await db.update(sessions).set({ revokedAt: now }).where(eq(sessions.id, matched.id));
 
     const newSessionId = newId("ses");
+    const environment = requestEnvironment(req);
     await db.insert(sessions).values({
       id: newSessionId,
       userId: matched.userId,
@@ -419,10 +427,22 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
       expiresAt: accessExpiry(),
       refreshExpiresAt: refreshExpiry(),
       lastUsedAt: now,
-      ipPrefix: truncateIp(req.ip),
+      ipPrefix: environment.ipPrefix,
+      userAgentSummary: environment.userAgentSummary,
+      authMethod: matched.authMethod,
     });
 
-    setAccessCookie(rep, newAccess);
+    await db
+      .update(devices)
+      .set({
+        lastSeenAt: now,
+        lastIpPrefix: environment.ipPrefix,
+        lastUserAgentSummary: environment.userAgentSummary,
+        lastAuthMethod: matched.authMethod,
+      })
+      .where(eq(devices.id, matched.deviceId));
+
+    rep.setCookie(SESSION_COOKIE, newAccess, cookieOptions(config.accessTokenTtl));
     rep.header("Cache-Control", "no-store");
 
     return {
@@ -510,9 +530,12 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
     await db.update(sessions).set({ revokedAt: now }).where(eq(sessions.id, req.auth!.sessionId));
 
     // Issue new session for current device
-    const { accessToken, refreshToken } = await createSession(
+    const { accessToken, refreshToken } = await issueSession(
+      db,
+      config,
       user.id,
       req.auth!.deviceId,
+      "password",
       req,
       rep,
     );

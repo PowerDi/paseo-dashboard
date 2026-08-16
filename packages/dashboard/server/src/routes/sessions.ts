@@ -36,6 +36,9 @@ export function registerSessionRoutes(app: FastifyInstance, db: Db, eventBus: Co
         lastUsedAt: r.session.lastUsedAt,
         expiresAt: r.session.expiresAt,
         revokedAt: r.session.revokedAt,
+        ipPrefix: r.session.ipPrefix,
+        userAgentSummary: r.session.userAgentSummary,
+        authMethod: r.session.authMethod,
         isCurrentSession: r.session.id === currentSessionId,
       }));
 

@@ -14,23 +14,10 @@ import { registerSessionRoutes } from "./routes/sessions.js";
 import { registerEventRoutes } from "./routes/events.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerInvitationRoutes } from "./routes/invitations.js";
+import { registerPasskeyRoutes } from "./routes/passkeys.js";
 import { ConfigEventBus } from "./lib/event-bus.js";
 import { setupSecurity } from "./lib/security.js";
 import type { ServerConfig } from "./config.js";
-
-/** Truncate IPv4 to /24, IPv6 to /64 for audit storage. */
-export function truncateIp(ip: string): string {
-  if (ip.includes(":")) {
-    // IPv6 — keep first 4 groups
-    const groups = ip.split(":");
-    return groups.slice(0, 4).join(":") + "::";
-  }
-  const parts = ip.split(".");
-  if (parts.length === 4) {
-    return parts.slice(0, 3).join(".") + ".0";
-  }
-  return ip;
-}
 
 export function buildApp(config: ServerConfig) {
   // Data directory
@@ -61,6 +48,7 @@ export function buildApp(config: ServerConfig) {
           "req.body.resetToken",
           "req.body.connection",
           "req.body.email",
+          "req.body.response",
           "res.body.connection",
           "res.body.accessToken",
           "res.body.refreshToken",
@@ -111,6 +99,7 @@ export function buildApp(config: ServerConfig) {
   // Routes
   app.get("/health", async () => ({ status: "ok", version: "0.1.0" }));
   registerAuthRoutes(app, db, config);
+  registerPasskeyRoutes(app, db, config);
   registerInvitationRoutes(app, db);
   const eventBus = new ConfigEventBus();
   app.decorate("eventBus", eventBus);

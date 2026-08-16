@@ -1,4 +1,5 @@
 import type { DeviceInfo, User } from "@getpaseo/dashboard-shared";
+import { startAuthentication } from "@simplewebauthn/browser";
 import { create } from "zustand";
 import {
   DashboardApiUnauthorizedError,
@@ -30,6 +31,7 @@ export interface AppState {
 
   bootstrap: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
+  loginWithPasskey: () => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   /** Called by the API layer when any authenticated request returns 401. */
@@ -37,7 +39,17 @@ export interface AppState {
 }
 
 export interface AppStoreDependencies {
-  api?: Pick<DashboardApiClient, "listHosts" | "getMe" | "login" | "register" | "logout">;
+  api?: Pick<
+    DashboardApiClient,
+    | "listHosts"
+    | "getMe"
+    | "login"
+    | "beginPasskeyLogin"
+    | "finishPasskeyLogin"
+    | "register"
+    | "logout"
+  >;
+  startPasskeyAuthentication?: typeof startAuthentication;
   /** Runs after login/bootstrap succeed and after logout, in that order. */
   onAuthenticated?: () => void;
   onLoggedOut?: () => void;
@@ -129,6 +141,21 @@ export function createAppStore(dependencies: AppStoreDependencies = {}) {
       const response = await api.login({ email, password, device: getDeviceInfo() });
       storeUser(response.user);
       set({ status: "ready", user: response.user, bootstrapError: null });
+      dependencies.onAuthenticated?.();
+    },
+
+    loginWithPasskey: async () => {
+      const ceremony = await api.beginPasskeyLogin();
+      const response = await (dependencies.startPasskeyAuthentication ?? startAuthentication)({
+        optionsJSON: ceremony.options,
+      });
+      const loginResponse = await api.finishPasskeyLogin(
+        ceremony.ceremonyId,
+        response,
+        getDeviceInfo(),
+      );
+      storeUser(loginResponse.user);
+      set({ status: "ready", user: loginResponse.user, bootstrapError: null });
       dependencies.onAuthenticated?.();
     },
 

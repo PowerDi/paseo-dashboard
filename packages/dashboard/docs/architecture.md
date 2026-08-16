@@ -151,14 +151,16 @@ server   ──X Paseo client/Relay/daemon
 
 ### Device
 
-| 字段                               | 说明                                                  |
-| ---------------------------------- | ----------------------------------------------------- |
-| `id`                               | 主键                                                  |
-| `userId`                           | 所有者 FK                                             |
-| `installationIdHash`               | 客户端随机 installation id 的 HMAC；不使用硬件唯一 ID |
-| `displayName/platform`             | 明文元数据                                            |
-| `devicePublicKey`                  | 可选，未来绑定 refresh token/签名                     |
-| `firstSeenAt/lastSeenAt/revokedAt` | 生命周期                                              |
+| 字段                                | 说明                                                  |
+| ----------------------------------- | ----------------------------------------------------- |
+| `id`                                | 主键                                                  |
+| `userId`                            | 所有者 FK                                             |
+| `installationIdHash`                | 客户端随机 installation id 的 HMAC；不使用硬件唯一 ID |
+| `displayName/platform`              | 明文元数据                                            |
+| `lastIpPrefix/lastUserAgentSummary` | 最近一次认证环境；IP 仅存前缀，User-Agent 仅存摘要    |
+| `lastAuthMethod`                    | 最近一次认证方式：`password` 或 `passkey`             |
+| `devicePublicKey`                   | 可选，未来绑定 refresh token/签名                     |
+| `firstSeenAt/lastSeenAt/revokedAt`  | 生命周期                                              |
 
 唯一约束建议为 `(userId, installationIdHash)`。
 
@@ -172,6 +174,18 @@ server   ──X Paseo client/Relay/daemon
 | `familyId/rotationCounter`       | 重用检测与 token family 撤销        |
 | `expiresAt/lastUsedAt/revokedAt` | 生命周期                            |
 | `ipPrefix/userAgentSummary`      | 限量审计元数据，不存完整敏感 header |
+| `authMethod`                     | 创建 session 的认证方式             |
+
+### Passkey
+
+| 字段                                      | 说明                                                                    |
+| ----------------------------------------- | ----------------------------------------------------------------------- |
+| `id/userId/credentialId`                  | 内部主键、所有者与 WebAuthn credential id                               |
+| `publicKey/counter/transports`            | 验证 assertion 所需数据；不保存私钥                                     |
+| `deviceType/backedUp/name`                | 设备类型、同步状态与用户可编辑显示名                                    |
+| `createdAt/lastUsedAt`                    | 生命周期                                                                |
+| `WebAuthnChallenge.purpose/challengeHash` | 五分钟、单次使用的注册或登录 challenge；数据库只保存哈希                |
+| `WebAuthnChallenge.userId/sessionId`      | 注册 challenge 绑定当前用户和 session；登录使用 discoverable credential |
 
 ### Invitation
 
@@ -289,11 +303,17 @@ server   ──X Paseo client/Relay/daemon
 POST /api/v1/auth/register        # 可带 email-bound inviteToken
 POST /api/v1/invitations             # admin；返回一次性原始 token
 POST /api/v1/auth/login
+POST /api/v1/auth/passkey/login/options
+POST /api/v1/auth/passkey/login/verify
 POST /api/v1/auth/refresh
 POST /api/v1/auth/logout
 POST /api/v1/auth/change-password
 GET  /api/v1/me
 DELETE /api/v1/me
+GET    /api/v1/passkeys
+POST   /api/v1/passkeys/registration/options
+POST   /api/v1/passkeys/registration/verify
+DELETE /api/v1/passkeys/{passkeyId}
 ```
 
 ```json
@@ -305,6 +325,8 @@ DELETE /api/v1/me
 ```
 
 Web 可选择完全 Cookie session；Harmony 使用 bearer access token 和一次性 refresh token。两种 transport profile 调用同一 endpoint、返回同一业务对象。不得把 refresh token 放 URL。
+
+Web Passkey 登录采用 discoverable credential，不先提交邮箱。注册 options 需要当前密码并绑定当前 session；注册和登录 verify 都消费一次性 ceremony。安全约束见 [security.md](security.md#passkey)。
 
 ### 设备和 session
 

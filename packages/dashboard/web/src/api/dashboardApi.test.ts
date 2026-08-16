@@ -40,3 +40,64 @@ it("fetches the current user from /me", async () => {
   });
   expect(fetchMock.mock.calls[0]![0]).toBe("/api/v1/me");
 });
+
+it("supports passkey ceremony endpoints", async () => {
+  const responses = [
+    { ceremonyId: "ceremony-login", options: { challenge: "login-challenge" } },
+    { user: { id: "usr1", email: "a@b.com" }, deviceId: "dev1", expiresIn: 900 },
+    { ceremonyId: "ceremony-registration", options: { challenge: "registration-challenge" } },
+    {
+      passkey: {
+        id: "psk1",
+        name: "Laptop",
+        deviceType: "singleDevice",
+        backedUp: false,
+        createdAt: "2026-08-16T00:00:00.000Z",
+        lastUsedAt: null,
+      },
+    },
+  ];
+  const fetchMock = vi.fn<typeof fetch>(async () => {
+    return new Response(JSON.stringify(responses.shift()), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+  const client = new DashboardApiClient({ fetch: fetchMock });
+
+  await expect(client.beginPasskeyLogin()).resolves.toMatchObject({ ceremonyId: "ceremony-login" });
+  await client.finishPasskeyLogin(
+    "ceremony-login",
+    {
+      id: "credential",
+      rawId: "credential",
+      response: {},
+      clientExtensionResults: {},
+      type: "public-key",
+    } as never,
+    { installationId: "install", name: "Browser", platform: "web" },
+  );
+  await expect(client.beginPasskeyRegistration("current-password")).resolves.toMatchObject({
+    ceremonyId: "ceremony-registration",
+  });
+  await client.finishPasskeyRegistration(
+    "ceremony-registration",
+    {
+      id: "credential",
+      rawId: "credential",
+      response: {},
+      clientExtensionResults: {},
+      type: "public-key",
+    } as never,
+    "Laptop",
+  );
+
+  expect(fetchMock).toHaveBeenCalledTimes(4);
+  expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toMatchObject({
+    ceremonyId: "ceremony-login",
+    device: { installationId: "install" },
+  });
+  expect(JSON.parse(String(fetchMock.mock.calls[2]![1]?.body))).toEqual({
+    currentPassword: "current-password",
+  });
+});

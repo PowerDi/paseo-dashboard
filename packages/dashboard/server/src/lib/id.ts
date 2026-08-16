@@ -10,7 +10,9 @@ export type IdPrefix =
   | "key"
   | "fam"
   | "inv"
-  | "rst";
+  | "rst"
+  | "psk"
+  | "wac";
 
 export function newId(prefix: IdPrefix): string {
   return `${prefix}_${ulid()}`;

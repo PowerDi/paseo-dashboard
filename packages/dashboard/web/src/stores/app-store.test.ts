@@ -14,6 +14,11 @@ function createApiStub(overrides: Partial<NonNullable<AppStoreDependencies["api"
     listHosts: vi.fn(async (): Promise<Host[]> => []),
     getMe: vi.fn(async () => ({ user: loginResponse.user })),
     login: vi.fn(async () => loginResponse),
+    beginPasskeyLogin: vi.fn(async () => ({
+      ceremonyId: "01CEREMONY",
+      options: { challenge: "challenge", rpId: "localhost" },
+    })),
+    finishPasskeyLogin: vi.fn(async () => loginResponse),
     register: vi.fn(async () => loginResponse),
     logout: vi.fn(async () => ({ ok: true })),
     ...overrides,
@@ -130,4 +135,31 @@ describe("device info", () => {
     expect(first.installationId).toBe(second.installationId);
     expect(first.platform).toBe("web");
   });
+});
+
+it("signs in through a passkey ceremony", async () => {
+  const api = createApiStub();
+  const startPasskeyAuthentication = vi.fn(
+    async () =>
+      ({
+        id: "credential",
+        rawId: "credential",
+        response: {},
+        clientExtensionResults: {},
+        type: "public-key",
+      }) as never,
+  );
+  const store = createAppStore({ api, startPasskeyAuthentication });
+
+  await store.getState().loginWithPasskey();
+
+  expect(startPasskeyAuthentication).toHaveBeenCalledWith({
+    optionsJSON: { challenge: "challenge", rpId: "localhost" },
+  });
+  expect(api.finishPasskeyLogin).toHaveBeenCalledWith(
+    "01CEREMONY",
+    expect.anything(),
+    expect.objectContaining({ platform: "web" }),
+  );
+  expect(store.getState().status).toBe("ready");
 });

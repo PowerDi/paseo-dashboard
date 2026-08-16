@@ -9,16 +9,33 @@ import type {
   HostUpdateRequest,
   LoginRequest,
   LoginResponse,
+  Passkey,
   RegisterRequest,
   Session,
   SyncResponse,
   User,
 } from "@getpaseo/dashboard-shared";
+import type {
+  AuthenticationResponseJSON,
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+  RegistrationResponseJSON,
+} from "@simplewebauthn/browser";
 import {
   createConfigEventStream,
   type ConfigEventStreamOptions,
   type ConfigEventSubscription,
 } from "./dashboardEvents";
+
+export interface PasskeyRegistrationOptionsResponse {
+  ceremonyId: string;
+  options: PublicKeyCredentialCreationOptionsJSON;
+}
+
+export interface PasskeyLoginOptionsResponse {
+  ceremonyId: string;
+  options: PublicKeyCredentialRequestOptionsJSON;
+}
 
 export interface DashboardApiClientOptions {
   /** Prefix for API URLs. Relative paths are used by default. */
@@ -135,6 +152,25 @@ export class DashboardApiClient {
     });
   }
 
+  beginPasskeyLogin(): Promise<PasskeyLoginOptionsResponse> {
+    return this.request<PasskeyLoginOptionsResponse>("/api/v1/auth/passkey/login/options", {
+      method: "POST",
+      notifyUnauthorized: false,
+    });
+  }
+
+  finishPasskeyLogin(
+    ceremonyId: string,
+    response: AuthenticationResponseJSON,
+    device: LoginRequest["device"],
+  ): Promise<LoginResponse> {
+    return this.request<LoginResponse>("/api/v1/auth/passkey/login/verify", {
+      method: "POST",
+      body: JSON.stringify({ ceremonyId, response, device }),
+      notifyUnauthorized: false,
+    });
+  }
+
   listHosts(): Promise<Host[]> {
     return this.request<Host[]>("/api/v1/hosts");
   }
@@ -184,6 +220,37 @@ export class DashboardApiClient {
         body: JSON.stringify(input),
       },
     );
+  }
+
+  listPasskeys(): Promise<Passkey[]> {
+    return this.request<Passkey[]>("/api/v1/passkeys");
+  }
+
+  beginPasskeyRegistration(currentPassword: string): Promise<PasskeyRegistrationOptionsResponse> {
+    return this.request<PasskeyRegistrationOptionsResponse>(
+      "/api/v1/passkeys/registration/options",
+      {
+        method: "POST",
+        body: JSON.stringify({ currentPassword }),
+      },
+    );
+  }
+
+  finishPasskeyRegistration(
+    ceremonyId: string,
+    response: RegistrationResponseJSON,
+    name: string,
+  ): Promise<{ passkey: Passkey }> {
+    return this.request<{ passkey: Passkey }>("/api/v1/passkeys/registration/verify", {
+      method: "POST",
+      body: JSON.stringify({ ceremonyId, response, name }),
+    });
+  }
+
+  deletePasskey(passkeyId: string): Promise<{ ok: boolean }> {
+    return this.request<{ ok: boolean }>(`/api/v1/passkeys/${encodeURIComponent(passkeyId)}`, {
+      method: "DELETE",
+    });
   }
 
   listAuditEvents(cursor?: string, limit?: number): Promise<AuditEventListResponse> {
@@ -261,6 +328,18 @@ export function login(input: LoginRequest): Promise<LoginResponse> {
   return dashboardApi.login(input);
 }
 
+export function beginPasskeyLogin(): Promise<PasskeyLoginOptionsResponse> {
+  return dashboardApi.beginPasskeyLogin();
+}
+
+export function finishPasskeyLogin(
+  ceremonyId: string,
+  response: AuthenticationResponseJSON,
+  device: LoginRequest["device"],
+): Promise<LoginResponse> {
+  return dashboardApi.finishPasskeyLogin(ceremonyId, response, device);
+}
+
 export function listHosts(): Promise<Host[]> {
   return dashboardApi.listHosts();
 }
@@ -291,6 +370,28 @@ export function getMe(): Promise<{ user: User }> {
 
 export function changePassword(input: ChangePasswordRequest): Promise<{ expiresIn: number }> {
   return dashboardApi.changePassword(input);
+}
+
+export function listPasskeys(): Promise<Passkey[]> {
+  return dashboardApi.listPasskeys();
+}
+
+export function beginPasskeyRegistration(
+  currentPassword: string,
+): Promise<PasskeyRegistrationOptionsResponse> {
+  return dashboardApi.beginPasskeyRegistration(currentPassword);
+}
+
+export function finishPasskeyRegistration(
+  ceremonyId: string,
+  response: RegistrationResponseJSON,
+  name: string,
+): Promise<{ passkey: Passkey }> {
+  return dashboardApi.finishPasskeyRegistration(ceremonyId, response, name);
+}
+
+export function deletePasskey(passkeyId: string): Promise<{ ok: boolean }> {
+  return dashboardApi.deletePasskey(passkeyId);
 }
 
 export function listAuditEvents(cursor?: string, limit?: number): Promise<AuditEventListResponse> {

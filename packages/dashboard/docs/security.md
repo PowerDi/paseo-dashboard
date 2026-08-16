@@ -92,10 +92,20 @@ MVP 选择 **服务端可解密的 envelope encryption**，原因是账号恢复
 - Web 优先使用 `Secure`、`HttpOnly`、`SameSite=Lax/Strict` Cookie；状态改变请求使用 CSRF token 或严格 same-origin + Origin 校验。
 - Harmony 使用 bearer access token，refresh token 存平台安全存储；不得依赖浏览器 Cookie。
 - 修改密码默认撤销其他 session；设备撤销撤销该设备所有 session。
+- 每次注册、登录和 refresh 都更新 device/session 的截断 IP、浏览器/操作系统摘要与认证方式。不得保存完整 User-Agent。
+
+### Passkey
+
+- Passkey 使用 WebAuthn discoverable credential，要求 user verification；密码登录继续保留。
+- 注册前必须用当前密码重新认证。registration challenge 绑定当前 user/session；登录 challenge 不先绑定用户，由 credential id 和 user handle 确认主体。
+- challenge 只保存 SHA-256、五分钟过期、单次消费。校验必须同时检查 RP ID、origin、challenge、user verification 和 signature counter。
+- attestation 使用 `none`。服务端只保存 credential id、公钥、counter、transport、device type 和 backup state，不保存私钥或 attestation object。
+- 生产部署必须把 RP ID 和 origin 配成浏览器实际访问的 HTTPS 域名。
 
 ### 防护
 
-- 注册和登录按 IP、normalized email 与 installation id 三个独立 bucket 限流；refresh 按 IP 与 token hash；Host 导入按 IP 与认证账号；修改密码按 IP。
+- 注册和密码登录按 IP、normalized email 与 installation id 三个独立 bucket 限流；refresh 按 IP 与 token hash；Host 导入按 IP 与认证账号；修改密码按 IP。
+- Passkey 登录 options 按 IP 限流，verify 按 IP 与 credential id 限流；Passkey 注册 options/verify 按 IP 限流。
 - bucket identity 先做 SHA-256，不在内存键中保留邮箱、installation id 或 refresh token 原文。路径匹配忽略 query string，拒绝响应包含 `Retry-After`。
 - 当前 limiter 是单进程内存状态。多实例部署必须改用共享限流存储，否则每个实例各自计数。
 - 不提供邮件找回或公开重置密码 endpoint。未来的本地管理员 recovery code/CLI 必须独立定义授权、审计和撤销边界；若增加网络入口，再补对应限流。
@@ -103,7 +113,7 @@ MVP 选择 **服务端可解密的 envelope encryption**，原因是账号恢复
 - CORS 默认只允许配置的 Dashboard origin；不使用 `*` 与凭据。
 - CSP 至少限制 `default-src 'self'`、明确 `connect-src` 为 Dashboard API 与用户配置 Relay 所需策略；禁止不受控第三方脚本。
 - 敏感页面设置 `Referrer-Policy: no-referrer`、`Cache-Control: no-store`。
-- 生产日志采用字段 allowlist；错误对象在进入 logger 前做 redaction。`inviteToken` 和邀请创建响应 token 与 access/refresh token 使用相同的脱敏规则。
+- 生产日志采用字段 allowlist；错误对象在进入 logger 前做 redaction。`inviteToken`、邀请创建响应 token、access/refresh token 与 WebAuthn response 使用相同的脱敏规则。
 - 数据库备份加密、限制访问、验证恢复，并包含密钥版本恢复演练。
 
 ## 撤销和删除
@@ -131,7 +141,7 @@ MVP 选择 **服务端可解密的 envelope encryption**，原因是账号恢复
 
 ## 审计
 
-至少记录：注册、登录成功/失败聚合、密码变更/重置、session/device 撤销、Host 导入/更新/删除、账户删除、加密 key rotation。
+至少记录：注册、登录成功/失败聚合、登录认证方式与截断环境、Passkey 添加/删除、密码变更、session/device 撤销、Host 导入/更新/删除、账户删除、加密 key rotation。
 
 审计不得记录：原始 URL、offer JSON、公钥 capability、完整 endpoint、access/refresh token、Cookie、密码、DEK/KEK、daemon 数据。
 
@@ -141,7 +151,8 @@ MVP 选择 **服务端可解密的 envelope encryption**，原因是账号恢复
 - Host import 的 idempotency key 和 capability fingerprint 只在账号内去重；不同用户的相同值不能复用或暴露其他用户 Host。
 - SSE 只向当前认证用户的订阅发送配置事件。
 - 关闭公开注册时，无邀请注册失败；邀请必须匹配邮箱、未过期、未撤销、未使用，且并发首用户注册只能产生一个管理员。
-- 注册、登录、refresh 和 Host 导入分别验证 IP、账号、installation 或 credential bucket；更换 query string、IP、账号或 installation 不能绕过仍适用的其他维度。
+- 注册、密码登录、Passkey ceremony、refresh 和 Host 导入分别验证 IP、账号、installation 或 credential bucket；更换 query string、IP、账号、installation 或 credential 不能绕过仍适用的其他维度。
+- Passkey 测试使用真实 P-256 key 和签名，覆盖错误密码、错误 origin、跨 session challenge、challenge 重放和跨用户删除。
 - revoked session 无法 refresh、sync 或读取 Host。
 - response/cache/proxy/APM/log fixture 中不存在 capability 原文。
 - 数据库 dump 不能在无 KEK 情况下恢复 connection。

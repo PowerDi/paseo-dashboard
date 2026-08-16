@@ -9,7 +9,7 @@
 - **仓库**：Paseo monorepo fork — `git@github.com:PowerDi/paseo-dashboard.git`
 - **代码位置**：`/root/workspace/code/paseo/packages/dashboard/`
 - **Paseo 源码**：`/root/workspace/code/paseo/`（monorepo 根，作为行为事实来源）
-- **当前阶段**：M3 与 P4.1 已完成，下一阶段是 P4.2 强认证与风险提示。
+- **当前阶段**：P4.2 的 Passkey 与登录环境审计已完成；风险登录提示暂缓，下一阶段是 P4.3 生产密钥管理。
 - **当前分支**：`feat/dashboard-multi-user`。注册邀请策略和 abuse 防护已分别提交到 `0ac903003`、`f1082fe09`。
 
 ## Git 协作
@@ -62,6 +62,15 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 - `inviteToken` 与邀请创建响应 token 已加入日志脱敏。新增 11 个注册策略合同测试（含公开注册、并发 bootstrap 与旧库角色迁移）。
 - rate limiter 从仅 IP 扩展为分层 bucket：注册/登录按 IP、normalized email、installation；refresh 按 IP、credential hash；Host 导入按 IP、认证账号。bucket identity 只存 SHA-256，query string 不能绕过路由限流，429 带 `Retry-After`。
 - 新增 7 个 abuse protection 合同测试；当前 contract 测试为 106 个。邮件找回和公开重置密码 endpoint 不在产品范围内。
+
+### P4.2 Passkey 与登录环境审计（2026-08-16，已完成当前范围）
+
+- device/session 记录截断 IP、浏览器/操作系统摘要和 `password`/`passkey` 认证方式；设备与会话页面展示这些信息，不保存完整 User-Agent。
+- Web 支持 discoverable Passkey 登录；设置页可在当前密码重新认证后注册、列出和删除 Passkey。密码登录继续保留。
+- WebAuthn ceremony challenge 只存哈希、五分钟过期、单次消费；注册绑定当前 user/session，验证强制 RP ID、origin、user verification 和 signature counter。
+- 服务端只保存 credential id、公钥、counter、transport、device type 和 backup state；WebAuthn response 加入日志脱敏。
+- Passkey options/verify 加入 IP 与 credential bucket。新增 6 个合同测试和 2 个 Web 单测；contract 106→112，web 128→130，静态总数 257→265。
+- 风险登录和新设备提示按 2026-08-16 的决定暂缓；本轮只记录 `newDevice` 审计事实，不弹提示。
 
 ### 亮色主题视觉验证（2026-08-16）
 
@@ -128,7 +137,7 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 
 ### 待开始
 
-M3 与 P4.1 已完成。Host/API 租户隔离合同矩阵、admin 邀请注册策略和现有认证入口的 abuse tests 已落地。Dashboard 不验证邮箱所有权。
+M3、P4.1 和 P4.2 当前范围已完成。Dashboard 不验证邮箱所有权；风险登录和新设备提示暂缓。
 
 已搁置，不阻塞 M3：
 
@@ -136,9 +145,10 @@ M3 与 P4.1 已完成。Host/API 租户隔离合同矩阵、admin 邀请注册�
 
 下一步：
 
-1. 进入 P4.2，先补 session/device 的登录环境审计与风险提示，再接 Passkey/WebAuthn。
-2. 密码恢复按未来本地管理员 recovery code/CLI 单独设计，不引入邮件服务。
-3. 权限卡片真实 provider 手工验证继续后置，不阻塞 P4。
+1. 进入 P4.3，设计生产 KMS、在线 key rotation 与备份恢复演练。
+2. 风险登录和新设备提示继续暂缓；需要恢复时直接从现有 `newDevice` 与登录环境审计事实接 UI。
+3. 密码恢复按未来本地管理员 recovery code/CLI 单独设计，不引入邮件服务。
+4. 权限卡片真实 provider 手工验证继续后置，不阻塞 P4。
 
 完整序列见 `docs/development-plan.md`（P4 多用户与设备安全 / P5 Harmony / P6 可选高级能力）。
 
@@ -220,7 +230,7 @@ npm run dev:dashboard:server   # 后端 端口 3000
 npm run dev:dashboard:web      # 前端 端口 5173
 
 # 测试
-npm run test:dashboard         # web 128 + contract 88 + e2e vitest 23
+npm run test:dashboard         # web 130 + contract 112 + e2e vitest 23
 # web 单测必须走 workspace 脚本（该包 vite.config 的 @ 别名），不要从根 vitest 直接跑 web/src
 npm run test --workspace=@getpaseo/dashboard-web
 
@@ -232,7 +242,7 @@ npm run typecheck:dashboard
 
 - server 用 SQLite + Drizzle ORM（`better-sqlite3` 同步 API）。
 - server 启动时自动创建 `data/` 目录和表；开发 KEK 自动生成于 `data/.kek`。
-- DB 表：users, devices, sessions, password_reset_tokens, hosts, host_connections, audit_events。
+- DB 表：users, invitations, devices, sessions, passkeys, webauthn_challenges, hosts, host_connections, audit_events。
 - `db.transaction(cb)` 回调必须同步（不可 async）。
 
 ### 加密
@@ -266,8 +276,8 @@ npm run typecheck:dashboard
 
 ### 测试统计
 
-- web 单测 **128**（16 文件：dashboardRuntime 18、timeline-store 15、daemon-data-store 13、features 10、agent-tree 10、permission-request-form 8、app-store 8、terminalSession 8、connectionManager 7、live-activity 7、dashboardEvents 6、routes 5、format-time 4、diff-lines 4、code-language 3、dashboardApi 2）。
-- contract **106**（server-auth 16、server-security 16、server-events 15、server-hosts 13、server-devices-sessions 9、server-registration-policy 11、server-sync 8、server-abuse-protection 7、server-auth-boundaries 5、server-host-import-isolation 1、auth 2、host-sync 3）+ e2e vitest **23**（connection-manager 4、offer-parser 3、compatibility 15、placeholder 1）= 静态统计 **257** 含 web。
+- web 单测 **130**（16 文件：dashboardRuntime 18、timeline-store 15、daemon-data-store 13、features 10、agent-tree 10、permission-request-form 8、app-store 9、terminalSession 8、connectionManager 7、live-activity 7、dashboardEvents 6、routes 5、format-time 4、diff-lines 4、code-language 3、dashboardApi 3）。
+- contract **112**（server-auth 16、server-security 16、server-events 15、server-hosts 13、server-devices-sessions 9、server-registration-policy 11、server-sync 8、server-abuse-protection 9、server-passkeys 4、server-auth-boundaries 5、server-host-import-isolation 1、auth 2、host-sync 3）+ e2e vitest **23**（connection-manager 4、offer-parser 3、compatibility 15、placeholder 1）= 静态统计 **265** 含 web。
 - Playwright 浏览器 E2E 3 测试（需 `PLAYWRIGHT_BROWSERS_PATH=/tmp/playwright-browsers`）。
 - **web 单测**：`packages/dashboard/web/package.json` 有 `test` 脚本，走该包自己的 `vite.config.ts`（`@` 指向 `web/src`）。根 `vitest.config.ts` 仍把 `@` 指到 `packages/app/src`，所以从仓库根直接 `npx vitest run packages/dashboard/web/src` 会错；用 `npm run test --workspace=@getpaseo/dashboard-web`。`test:dashboard` 现已包含 web。P3.5 兼容性测试 15 单测在 `tests/e2e/src/compatibility.vitest.test.ts`。
 - **CI 不跑 dashboard 测试，这是有意的**：`.github/workflows/ci.yml` 的测试 job 点名指定包，不要往里加 dashboard。dashboard 测试在本地跑 `test:dashboard`。根 `npm run typecheck`/`lint`/`format:check` 是 `--workspaces`，这三项会覆盖到 dashboard。
@@ -328,3 +338,4 @@ npm run typecheck:dashboard
 | 2026-08-16 | Codex            | P4.1 注册策略：首用户 admin、后续 member；关闭公开注册时仅接受 admin 创建的 email-bound、限时、单次邀请；同邮箱重发撤销旧 token，原始 token 只返回一次且日志脱敏。注册判定和写入改为 `IMMEDIATE` 事务，并发 bootstrap 只能产生一个管理员。新增 11 个合同测试，contract 88→99，静态总数 239→250；邮箱验证与 abuse tests 继续。                                                                                                                                                                                                            |
 | 2026-08-16 | Codex            | P4.1 abuse 防护：注册/登录按 IP、normalized email、installation 分层限流，refresh 按 IP/credential hash，Host 导入按 IP/认证账号；bucket identity 只保留 SHA-256，query string 不再绕过匹配，429 返回 `Retry-After`。新增 7 个合同测试，contract 99→106，静态总数 250→257；重置密码防护随未来恢复 endpoint 实现。                                                                                                                                                                                                                        |
 | 2026-08-16 | Codex            | 产品决策收口：Dashboard 定位为自托管自用，不验证邮箱所有权，也不引入邮件找回。邮箱只作为登录标识和邀请匹配条件，邀请 token 的持有证明管理员授权；P4.1 据此完成，下一阶段转入 P4.2 session/device 风险审计与 Passkey。                                                                                                                                                                                                                                                                                                                    |
+| 2026-08-16 | Codex            | P4.2 当前范围完成：device/session 增加截断 IP、User-Agent 摘要和认证方式；Web 增加 discoverable Passkey 注册、登录、列表和删除；challenge 哈希化、五分钟、单次消费并校验 RP/origin/UV/counter，credential 与 ceremony 有独立 abuse bucket。新增 6 个合同测试和 2 个 Web 单测，contract 106→112、web 128→130、静态总数 257→265。风险登录与新设备提示按用户决定暂缓，下一阶段 P4.3。                                                                                                                                                       |

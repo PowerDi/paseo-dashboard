@@ -51,9 +51,12 @@ npm run typecheck:dashboard
 | `PASEO_BOARD_KEK_FILE`          | 空（开发自动生成）      | 生产必须指定外部 32 字节密钥文件 |
 | `PASEO_BOARD_CORS_ORIGIN`       | `http://localhost:5173` | CORS 允许来源                    |
 | `PASEO_BOARD_REGISTRATION_OPEN` | `true`                  | 是否允许首用户之后的公开注册     |
+| `PASEO_BOARD_WEBAUTHN_ORIGIN`   | 与 CORS origin 相同     | WebAuthn 页面 origin             |
+| `PASEO_BOARD_WEBAUTHN_RP_ID`    | origin hostname         | WebAuthn RP ID                   |
+| `PASEO_BOARD_WEBAUTHN_RP_NAME`  | `Paseo Dashboard`       | Passkey 提示中的服务名           |
 
 ## 当前状态
 
-M3 与 P4.1 已完成：租户隔离、admin 邀请注册和现有认证入口的 abuse 防护已落地。下一阶段是 P4.2 强认证与会话审计。
+M3 与 P4.1 已完成。P4.2 已加入 Passkey/WebAuthn 和 session/device 登录环境审计；风险登录提示按 2026-08-16 的决定暂缓。下一阶段是 P4.3 生产密钥管理。
 
 详见 `docs/progress.md`。

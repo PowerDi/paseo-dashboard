@@ -41,6 +41,9 @@ export const devices = sqliteTable(
     platform: text("platform").notNull(),
     firstSeenAt: text("first_seen_at").notNull(),
     lastSeenAt: text("last_seen_at").notNull(),
+    lastIpPrefix: text("last_ip_prefix"),
+    lastUserAgentSummary: text("last_user_agent_summary"),
+    lastAuthMethod: text("last_auth_method", { enum: ["password", "passkey"] }),
     lastSyncedRevision: integer("last_synced_revision").notNull().default(0),
     revokedAt: text("revoked_at"),
   },
@@ -66,6 +69,36 @@ export const sessions = sqliteTable("sessions", {
   revokedAt: text("revoked_at"),
   ipPrefix: text("ip_prefix"),
   userAgentSummary: text("user_agent_summary"),
+  authMethod: text("auth_method", { enum: ["password", "passkey"] })
+    .notNull()
+    .default("password"),
+});
+
+export const passkeys = sqliteTable("passkeys", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  credentialId: text("credential_id").notNull().unique(),
+  publicKeyB64: text("public_key_b64").notNull(),
+  counter: integer("counter").notNull().default(0),
+  transports: text("transports").notNull().default("[]"),
+  deviceType: text("device_type", { enum: ["singleDevice", "multiDevice"] }).notNull(),
+  backedUp: integer("backed_up", { mode: "boolean" }).notNull().default(false),
+  name: text("name").notNull(),
+  createdAt: text("created_at").notNull(),
+  lastUsedAt: text("last_used_at"),
+});
+
+export const webauthnChallenges = sqliteTable("webauthn_challenges", {
+  id: text("id").primaryKey(),
+  purpose: text("purpose", { enum: ["registration", "authentication"] }).notNull(),
+  userId: text("user_id"),
+  sessionId: text("session_id"),
+  challengeHash: text("challenge_hash").notNull(),
+  createdAt: text("created_at").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  usedAt: text("used_at"),
 });
 
 export const hosts = sqliteTable("hosts", {

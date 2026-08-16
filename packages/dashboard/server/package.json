@@ -30,6 +30,7 @@
     "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^10.0.0",
     "@getpaseo/dashboard-shared": "*",
+    "@simplewebauthn/server": "^13.3.2",
     "argon2": "^0.45.1",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.2",

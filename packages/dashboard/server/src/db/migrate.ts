@@ -37,6 +37,9 @@ export function ensureTables(dataDir: string) {
       platform TEXT NOT NULL,
       first_seen_at TEXT NOT NULL,
       last_seen_at TEXT NOT NULL,
+      last_ip_prefix TEXT,
+      last_user_agent_summary TEXT,
+      last_auth_method TEXT CHECK(last_auth_method IN ('password','passkey')),
       last_synced_revision INTEGER NOT NULL DEFAULT 0,
       revoked_at TEXT
     );
@@ -56,11 +59,40 @@ export function ensureTables(dataDir: string) {
       last_used_at TEXT NOT NULL,
       revoked_at TEXT,
       ip_prefix TEXT,
-      user_agent_summary TEXT
+      user_agent_summary TEXT,
+      auth_method TEXT NOT NULL DEFAULT 'password' CHECK(auth_method IN ('password','passkey'))
     );
     CREATE INDEX IF NOT EXISTS sessions_family_idx ON sessions(family_id);
     CREATE INDEX IF NOT EXISTS sessions_refresh_hash_idx ON sessions(refresh_token_hash);
     CREATE INDEX IF NOT EXISTS sessions_access_hash_idx ON sessions(access_token_hash);
+
+    CREATE TABLE IF NOT EXISTS passkeys (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      credential_id TEXT NOT NULL UNIQUE,
+      public_key_b64 TEXT NOT NULL,
+      counter INTEGER NOT NULL DEFAULT 0,
+      transports TEXT NOT NULL DEFAULT '[]',
+      device_type TEXT NOT NULL CHECK(device_type IN ('singleDevice','multiDevice')),
+      backed_up INTEGER NOT NULL DEFAULT 0,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      last_used_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS passkeys_user_idx ON passkeys(user_id);
+
+    CREATE TABLE IF NOT EXISTS webauthn_challenges (
+      id TEXT PRIMARY KEY,
+      purpose TEXT NOT NULL CHECK(purpose IN ('registration','authentication')),
+      user_id TEXT,
+      session_id TEXT,
+      challenge_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS webauthn_challenges_expiry_idx
+      ON webauthn_challenges(expires_at);
 
     CREATE TABLE IF NOT EXISTS hosts (
       id TEXT PRIMARY KEY,
@@ -134,11 +166,27 @@ export function ensureTables(dataDir: string) {
   if (!sessionCols.some((col) => col.name === "created_at")) {
     db.exec("ALTER TABLE sessions ADD COLUMN created_at TEXT NOT NULL DEFAULT ''");
   }
+  if (!sessionCols.some((col) => col.name === "auth_method")) {
+    db.exec(
+      "ALTER TABLE sessions ADD COLUMN auth_method TEXT NOT NULL DEFAULT 'password' CHECK(auth_method IN ('password','passkey'))",
+    );
+  }
 
   // Idempotent migration: add last_synced_revision column to devices table.
   const deviceCols = db.pragma("table_info(devices)") as Array<{ name: string }>;
   if (!deviceCols.some((col) => col.name === "last_synced_revision")) {
     db.exec("ALTER TABLE devices ADD COLUMN last_synced_revision INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!deviceCols.some((col) => col.name === "last_ip_prefix")) {
+    db.exec("ALTER TABLE devices ADD COLUMN last_ip_prefix TEXT");
+  }
+  if (!deviceCols.some((col) => col.name === "last_user_agent_summary")) {
+    db.exec("ALTER TABLE devices ADD COLUMN last_user_agent_summary TEXT");
+  }
+  if (!deviceCols.some((col) => col.name === "last_auth_method")) {
+    db.exec(
+      "ALTER TABLE devices ADD COLUMN last_auth_method TEXT CHECK(last_auth_method IN ('password','passkey'))",
+    );
   }
 
   // Idempotent migration: add last_sync_revision column to existing databases.

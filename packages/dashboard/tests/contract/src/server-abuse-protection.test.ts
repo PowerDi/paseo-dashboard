@@ -201,6 +201,50 @@ describe("Abuse protection", () => {
     expect(otherDevice.statusCode).toBe(401);
   });
 
+  it("limits public passkey option ceremonies by IP", async () => {
+    for (let index = 1; index <= 20; index++) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/passkey/login/options",
+        headers: fromIp(200),
+      });
+      expect(response.statusCode).toBe(200);
+    }
+
+    const limited = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/passkey/login/options",
+      headers: fromIp(200),
+    });
+    expect(limited.statusCode).toBe(429);
+  });
+
+  it("limits passkey assertions by credential across IPs", async () => {
+    for (let index = 1; index <= 5; index++) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/passkey/login/verify",
+        headers: fromIp(210 + index),
+        payload: {
+          response: { id: "shared-passkey-credential" },
+          device: device(`passkey-device-${index}`),
+        },
+      });
+      expect(response.statusCode).toBe(400);
+    }
+
+    const limited = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/passkey/login/verify",
+      headers: fromIp(216),
+      payload: {
+        response: { id: "shared-passkey-credential" },
+        device: device("passkey-device-6"),
+      },
+    });
+    expect(limited.statusCode).toBe(429);
+  });
+
   it("limits refresh replay by credential across IPs", async () => {
     for (let index = 1; index <= 10; index++) {
       const response = await app.inject({

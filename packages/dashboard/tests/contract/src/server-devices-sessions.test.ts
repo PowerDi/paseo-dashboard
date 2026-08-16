@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
 import { buildApp } from "@getpaseo/dashboard-server/app";
 import type { ServerConfig } from "@getpaseo/dashboard-server/config";
-import type { Device } from "@getpaseo/dashboard-shared";
+import type { Device, Session } from "@getpaseo/dashboard-shared";
 
 function makeTestConfig(): { config: ServerConfig; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), "paseo-dev-test-"));
@@ -70,6 +70,10 @@ async function loginSecondDevice(
   const res = await app.inject({
     method: "POST",
     url: "/api/v1/auth/login",
+    headers: {
+      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/132.0 internal-detail",
+    },
+    remoteAddress: "198.51.100.77",
     payload: {
       email,
       password,
@@ -97,6 +101,11 @@ describe("Device & Session management (P2.2)", () => {
     const regRes = await app.inject({
       method: "POST",
       url: "/api/v1/auth/register",
+      headers: {
+        "user-agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36 secret-detail",
+      },
+      remoteAddress: "203.0.113.42",
       payload: {
         email,
         password,
@@ -131,7 +140,15 @@ describe("Device & Session management (P2.2)", () => {
     expect(current).toBeDefined();
     expect(current?.platform).toBe("web");
     expect(current?.lastSyncedRevision).toBe(0);
+    expect(current?.lastIpPrefix).toBe("203.0.113.0");
+    expect(current?.lastUserAgentSummary).toBe("Chrome 131 · Windows");
+    expect(current?.lastAuthMethod).toBe("password");
     expect(current?.revokedAt).toBeNull();
+
+    const second = devices.find((device) => !device.isCurrentDevice);
+    expect(second?.lastIpPrefix).toBe("198.51.100.0");
+    expect(second?.lastUserAgentSummary).toBe("Firefox 132 · Linux");
+    expect(second?.lastAuthMethod).toBe("password");
   });
 
   it("GET /devices from device B marks B as current", async () => {
@@ -251,12 +268,15 @@ describe("Device & Session management (P2.2)", () => {
       cookies: { [cookieA.name]: cookieA.value },
     });
     expect(res.statusCode).toBe(200);
-    const sessions = res.json();
+    const sessions = res.json() as (Session & { isCurrentSession: boolean })[];
     expect(Array.isArray(sessions)).toBe(true);
     expect(sessions.length).toBeGreaterThanOrEqual(1);
 
-    const current = sessions.find((s: { isCurrentSession: boolean }) => s.isCurrentSession);
+    const current = sessions.find((session) => session.isCurrentSession);
     expect(current).toBeDefined();
+    expect(current?.ipPrefix).toBe("203.0.113.0");
+    expect(current?.userAgentSummary).toBe("Chrome 131 · Windows");
+    expect(current?.authMethod).toBe("password");
   });
 
   it("GET /sessions excludes revoked sessions", async () => {

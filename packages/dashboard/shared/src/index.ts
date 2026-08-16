@@ -99,6 +99,17 @@ export interface ChangePasswordRequest {
   revokeOtherSessions: boolean;
 }
 
+export type AuthMethod = "password" | "passkey";
+
+export interface Passkey {
+  id: Ulid;
+  name: string;
+  deviceType: "singleDevice" | "multiDevice";
+  backedUp: boolean;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
 export interface ForgotPasswordRequest {
   email: string;
 }
@@ -116,6 +127,9 @@ export interface Device {
   platform: string;
   firstSeenAt: string;
   lastSeenAt: string;
+  lastIpPrefix: string | null;
+  lastUserAgentSummary: string | null;
+  lastAuthMethod: AuthMethod | null;
   revokedAt: string | null;
   lastSyncedRevision: number;
   isCurrentDevice: boolean;
@@ -129,6 +143,9 @@ export interface Session {
   lastUsedAt: string;
   expiresAt: string;
   revokedAt: string | null;
+  ipPrefix: string | null;
+  userAgentSummary: string | null;
+  authMethod: AuthMethod;
 }
 
 // ── Host ──────────────────────────────────────────────
