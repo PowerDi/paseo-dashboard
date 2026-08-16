@@ -39,6 +39,10 @@ export type DaemonClientLike = Pick<
   | "listDirectory"
   | "readFile"
   | "subscribeFile"
+  | "writeFile"
+  | "createFileEntry"
+  | "renameFileEntry"
+  | "deleteFileEntry"
 >;
 export type DaemonClientFactory = (config: DaemonClientConfig) => DaemonClientLike;
 export type PaseoConnectionListener = (state: HostConnectionState) => void;

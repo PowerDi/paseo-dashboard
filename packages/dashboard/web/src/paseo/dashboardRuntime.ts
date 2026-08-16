@@ -40,6 +40,10 @@ export type DashboardFileDirectory = Awaited<ReturnType<DaemonClientLike["listDi
 export type DashboardFileEntry = DashboardFileDirectory["entries"][number];
 export type DashboardFileRead = Awaited<ReturnType<DaemonClientLike["readFile"]>>;
 export type DashboardFileVersion = Parameters<Parameters<DaemonClientLike["subscribeFile"]>[1]>[0];
+export type DashboardFileWriteResult = Awaited<ReturnType<DaemonClientLike["writeFile"]>>;
+export type DashboardFileCreateResult = Awaited<ReturnType<DaemonClientLike["createFileEntry"]>>;
+export type DashboardFileRenameResult = Awaited<ReturnType<DaemonClientLike["renameFileEntry"]>>;
+export type DashboardFileDeleteResult = Awaited<ReturnType<DaemonClientLike["deleteFileEntry"]>>;
 
 export interface DashboardHostRuntimeState {
   connection: HostConnectionState;
@@ -98,6 +102,22 @@ export interface DashboardPaseoRuntime {
     input: { cwd: string; path: string },
     onUpdate: (version: DashboardFileVersion) => void,
   ): Promise<{ initial: DashboardFileVersion; unsubscribe: () => void }>;
+  writeFile(
+    hostId: string,
+    input: Parameters<DaemonClientLike["writeFile"]>[0],
+  ): Promise<DashboardFileWriteResult>;
+  createFileEntry(
+    hostId: string,
+    input: Parameters<DaemonClientLike["createFileEntry"]>[0],
+  ): Promise<DashboardFileCreateResult>;
+  renameFileEntry(
+    hostId: string,
+    input: Parameters<DaemonClientLike["renameFileEntry"]>[0],
+  ): Promise<DashboardFileRenameResult>;
+  deleteFileEntry(
+    hostId: string,
+    input: Parameters<DaemonClientLike["deleteFileEntry"]>[0],
+  ): Promise<DashboardFileDeleteResult>;
   createTerminal(
     hostId: string,
     cwd: string,
@@ -397,6 +417,22 @@ export function createDashboardRuntime(
 
     async subscribeFile(hostId, input, onUpdate) {
       return requireClient(hostId).subscribeFile(input, onUpdate);
+    },
+
+    async writeFile(hostId, input) {
+      return requireClient(hostId).writeFile(input);
+    },
+
+    async createFileEntry(hostId, input) {
+      return requireClient(hostId).createFileEntry(input);
+    },
+
+    async renameFileEntry(hostId, input) {
+      return requireClient(hostId).renameFileEntry(input);
+    },
+
+    async deleteFileEntry(hostId, input) {
+      return requireClient(hostId).deleteFileEntry(input);
     },
 
     async createTerminal(hostId, cwd, options) {

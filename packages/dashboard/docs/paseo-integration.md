@@ -117,18 +117,25 @@ interface PaseoConnectionManager {
 
 第一阶段按功能逐项实现，不按 Paseo 文件逐项复制：
 
-| 功能                   | Dashboard 实现方式                                            |
-| ---------------------- | ------------------------------------------------------------- |
-| Host 列表和切换        | 使用 Dashboard Host sync 数据，自行实现页面                   |
-| Project/Workspace 列表 | 通过 client 调 daemon，自行建立页面状态                       |
-| Agent 列表和生命周期   | 调用 client 对应方法，自行实现交互                            |
-| Timeline               | 使用 daemon timeline 消息，自行实现展示和分页                 |
-| 实时输出               | 订阅 client 事件，自行管理页面更新                            |
-| Prompt                 | 通过 client 发送，自行实现输入区                              |
-| 权限请求               | 订阅并响应 daemon 权限消息                                    |
-| Terminal               | 使用现有 daemon binary frame 规则，自行实现 Web terminal 页面 |
+| 功能                   | Dashboard 实现方式                                                |
+| ---------------------- | ----------------------------------------------------------------- |
+| Host 列表和切换        | 使用 Dashboard Host sync 数据，自行实现页面                       |
+| Project/Workspace 列表 | 通过 client 调 daemon，自行建立页面状态                           |
+| Agent 列表和生命周期   | 调用 client 对应方法，自行实现交互                                |
+| Timeline               | 使用 daemon timeline 消息，自行实现展示和分页                     |
+| 实时输出               | 订阅 client 事件，自行管理页面更新                                |
+| Prompt                 | 通过 client 发送，自行实现输入区                                  |
+| 权限请求               | 订阅并响应 daemon 权限消息                                        |
+| Terminal               | 使用现有 daemon binary frame 规则，自行实现 Web terminal 页面     |
+| 文件浏览器             | 通过 client 的文件 RPC 浏览和修改 Workspace，不经过 Dashboard API |
 
 前期按功能可用落地。视觉与交互以 [`docs/ui.md`](./ui.md) 为准（参照 Zeno desktop，不参照 Paseo App）。页面重构不得影响底层 daemon 连接测试。
+
+### Workspace 文件传输
+
+Workspace 文本上传使用 `createFileEntry` 创建文件，再用 `writeFile` 写入 UTF-8 内容。不要使用 `uploadFile`：该方法保存 prompt attachment，不写入当前 Workspace。二进制 Workspace 上传暂缓。
+
+下载通过 `readFile` 接收字节并在浏览器创建本地下载。不要依赖 `requestDownloadToken` 返回的 daemon HTTP 地址；只经 Relay 连接的浏览器可能无法访问该地址。这样直接连接和 Relay 连接都沿用相同的 daemon WebSocket/E2EE 数据路径。
 
 ## 兼容策略
 

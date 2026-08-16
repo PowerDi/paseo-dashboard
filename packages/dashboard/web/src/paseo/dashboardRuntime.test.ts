@@ -320,6 +320,53 @@ class RuntimeClient implements DaemonClientLike, DaemonDataClient {
     };
   }
 
+  async writeFile(): Promise<Awaited<ReturnType<DaemonClientLike["writeFile"]>>> {
+    return {
+      status: "written",
+      modifiedAt: "2026-08-13T00:00:00.000Z",
+      size: 0,
+      revision: "rev-2",
+    };
+  }
+
+  async createFileEntry(
+    input: Parameters<DaemonClientLike["createFileEntry"]>[0],
+  ): Promise<Awaited<ReturnType<DaemonClientLike["createFileEntry"]>>> {
+    return {
+      cwd: input.cwd,
+      parentPath: input.parentPath,
+      path: `${input.parentPath}/${input.name}`,
+      success: true,
+      error: null,
+      requestId: "req-create-file",
+    };
+  }
+
+  async renameFileEntry(
+    input: Parameters<DaemonClientLike["renameFileEntry"]>[0],
+  ): Promise<Awaited<ReturnType<DaemonClientLike["renameFileEntry"]>>> {
+    return {
+      cwd: input.cwd,
+      path: input.path,
+      renamedPath: input.name,
+      success: true,
+      error: null,
+      requestId: "req-rename-file",
+    };
+  }
+
+  async deleteFileEntry(
+    input: Parameters<DaemonClientLike["deleteFileEntry"]>[0],
+  ): Promise<Awaited<ReturnType<DaemonClientLike["deleteFileEntry"]>>> {
+    return {
+      cwd: input.cwd,
+      path: input.path,
+      success: true,
+      error: null,
+      requestId: "req-delete-file",
+    };
+  }
+
   // Property with an assertion because matching DaemonClient's `on` overload
   // set (including the DaemonEventHandler variant) is not worth it in a fake.
   readonly on = ((
@@ -615,7 +662,7 @@ describe("dashboard Paseo runtime", () => {
     expect(clients.get("host-a")?.respondToPermission).not.toHaveBeenCalled();
   });
 
-  test("forwards read-only file explorer operations", async () => {
+  test("forwards file explorer operations", async () => {
     const { clients, runtime } = createRuntimeWithClients();
     await runtime.connectHost(makeHost("host-a"));
     const client = clients.get("host-a");
@@ -655,6 +702,39 @@ describe("dashboard Paseo runtime", () => {
     const subscribeFile = vi
       .spyOn(client, "subscribeFile")
       .mockResolvedValue({ initial, unsubscribe });
+    const writeResult = {
+      status: "written" as const,
+      modifiedAt: "2026-08-13T00:00:01.000Z",
+      size: 15,
+      revision: "rev-2",
+    };
+    const createResult = {
+      cwd: "/projects/host-a",
+      parentPath: "src",
+      path: "src/new.ts",
+      success: true,
+      error: null,
+      requestId: "req-create",
+    };
+    const renameResult = {
+      cwd: "/projects/host-a",
+      path: "src/index.ts",
+      renamedPath: "src/main.ts",
+      success: true,
+      error: null,
+      requestId: "req-rename",
+    };
+    const deleteResult = {
+      cwd: "/projects/host-a",
+      path: "src/main.ts",
+      success: true,
+      error: null,
+      requestId: "req-delete",
+    };
+    const writeFile = vi.spyOn(client, "writeFile").mockResolvedValue(writeResult);
+    const createFileEntry = vi.spyOn(client, "createFileEntry").mockResolvedValue(createResult);
+    const renameFileEntry = vi.spyOn(client, "renameFileEntry").mockResolvedValue(renameResult);
+    const deleteFileEntry = vi.spyOn(client, "deleteFileEntry").mockResolvedValue(deleteResult);
     const onUpdate = vi.fn();
 
     await expect(runtime.listDirectory("host-a", "/projects/host-a", "src")).resolves.toEqual(
@@ -666,6 +746,36 @@ describe("dashboard Paseo runtime", () => {
     await expect(
       runtime.subscribeFile("host-a", { cwd: "/projects/host-a", path: "src/index.ts" }, onUpdate),
     ).resolves.toEqual({ initial, unsubscribe });
+    await expect(
+      runtime.writeFile("host-a", {
+        cwd: "/projects/host-a",
+        path: "src/index.ts",
+        content: "export const x = 1;",
+        expectedModifiedAt: "2026-08-13T00:00:00.000Z",
+        expectedRevision: "rev-1",
+      }),
+    ).resolves.toEqual(writeResult);
+    await expect(
+      runtime.createFileEntry("host-a", {
+        cwd: "/projects/host-a",
+        parentPath: "src",
+        name: "new.ts",
+        kind: "file",
+      }),
+    ).resolves.toEqual(createResult);
+    await expect(
+      runtime.renameFileEntry("host-a", {
+        cwd: "/projects/host-a",
+        path: "src/index.ts",
+        name: "main.ts",
+      }),
+    ).resolves.toEqual(renameResult);
+    await expect(
+      runtime.deleteFileEntry("host-a", {
+        cwd: "/projects/host-a",
+        path: "src/main.ts",
+      }),
+    ).resolves.toEqual(deleteResult);
 
     expect(listDirectory).toHaveBeenCalledWith("/projects/host-a", "src");
     expect(readFile).toHaveBeenCalledWith("/projects/host-a", "src/index.ts");
@@ -673,6 +783,28 @@ describe("dashboard Paseo runtime", () => {
       { cwd: "/projects/host-a", path: "src/index.ts" },
       onUpdate,
     );
+    expect(writeFile).toHaveBeenCalledWith({
+      cwd: "/projects/host-a",
+      path: "src/index.ts",
+      content: "export const x = 1;",
+      expectedModifiedAt: "2026-08-13T00:00:00.000Z",
+      expectedRevision: "rev-1",
+    });
+    expect(createFileEntry).toHaveBeenCalledWith({
+      cwd: "/projects/host-a",
+      parentPath: "src",
+      name: "new.ts",
+      kind: "file",
+    });
+    expect(renameFileEntry).toHaveBeenCalledWith({
+      cwd: "/projects/host-a",
+      path: "src/index.ts",
+      name: "main.ts",
+    });
+    expect(deleteFileEntry).toHaveBeenCalledWith({
+      cwd: "/projects/host-a",
+      path: "src/main.ts",
+    });
   });
 
   test("preserves file explorer daemon errors", async () => {
@@ -684,6 +816,10 @@ describe("dashboard Paseo runtime", () => {
     vi.spyOn(client, "listDirectory").mockRejectedValue(new Error("path outside workspace"));
     vi.spyOn(client, "readFile").mockRejectedValue(new Error("file unavailable"));
     vi.spyOn(client, "subscribeFile").mockRejectedValue(new Error("watch unavailable"));
+    vi.spyOn(client, "writeFile").mockRejectedValue(new Error("write unavailable"));
+    vi.spyOn(client, "createFileEntry").mockRejectedValue(new Error("create unavailable"));
+    vi.spyOn(client, "renameFileEntry").mockRejectedValue(new Error("rename unavailable"));
+    vi.spyOn(client, "deleteFileEntry").mockRejectedValue(new Error("delete unavailable"));
 
     await expect(runtime.listDirectory("host-a", "/projects/host-a", "../secret")).rejects.toThrow(
       "path outside workspace",
@@ -694,6 +830,35 @@ describe("dashboard Paseo runtime", () => {
     await expect(
       runtime.subscribeFile("host-a", { cwd: "/projects/host-a", path: "missing.ts" }, vi.fn()),
     ).rejects.toThrow("watch unavailable");
+    await expect(
+      runtime.writeFile("host-a", {
+        cwd: "/projects/host-a",
+        path: "missing.ts",
+        content: "",
+        expectedModifiedAt: "2026-08-13T00:00:00.000Z",
+      }),
+    ).rejects.toThrow("write unavailable");
+    await expect(
+      runtime.createFileEntry("host-a", {
+        cwd: "/projects/host-a",
+        parentPath: "",
+        name: "new.ts",
+        kind: "file",
+      }),
+    ).rejects.toThrow("create unavailable");
+    await expect(
+      runtime.renameFileEntry("host-a", {
+        cwd: "/projects/host-a",
+        path: "missing.ts",
+        name: "renamed.ts",
+      }),
+    ).rejects.toThrow("rename unavailable");
+    await expect(
+      runtime.deleteFileEntry("host-a", {
+        cwd: "/projects/host-a",
+        path: "missing.ts",
+      }),
+    ).rejects.toThrow("delete unavailable");
   });
 
   test("viewAgent subscribes the selective stream and loads the timeline tail", async () => {

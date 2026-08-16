@@ -17,7 +17,7 @@ Dashboard 通过 `server_info.features.*` 实现特性门控（feature gating）
 | v0.1.80-    | 无 `features` 字段                                                 | 所有特性门控返回 `false`，相关功能不可用               |
 | v0.1.81+    | `{ "terminal-restore-modes": true }`                               | Terminal 支持 restore options（mode、scrollbackLines） |
 | v0.1.106+   | `{ "terminal-restore-modes": true, selectiveAgentTimeline: true }` | + Agent timeline 选择性订阅（viewAgent/leaveAgent）    |
-| v0.2.0+     | `workspaceFileEditing: true`                                       | + Workspace 文件只读查看与文件变更订阅                 |
+| v0.2.0+     | `workspaceFileEditing: true`                                       | + Workspace 文件浏览、文本编辑与条目操作               |
 
 ## 特性门控列表
 
@@ -44,11 +44,12 @@ Dashboard 当前使用的所有 feature gates（位于 `web/src/paseo/features.t
 ### 3. `workspaceFileEditing`
 
 - **添加版本**：v0.2.0
-- **用途**：daemon 支持 `fs.file.subscribe` 文件版本订阅和同组文件写入 RPC；Dashboard P3.7.1 只使用订阅部分。
+- **用途**：daemon 支持 `fs.file.subscribe`、文本写入和文件条目操作。
 - **门控位置**：`web/src/pages/WorkspacePage.tsx` 的 Workspace 视图切换。
 - **行为**：
-  - **有 feature**：显示「文件」视图，使用 `listDirectory`、`readFile` 和 `subscribeFile`。
-  - **无 feature**：隐藏「文件」视图，不通过轮询或旧 RPC 模拟文件订阅。
+  - **有 feature**：显示「文件」视图，支持目录浏览、文件读取与订阅、文本保存、重命名、删除、文本上传和文件下载。
+  - **无 feature**：隐藏「文件」视图，不通过轮询或旧 RPC 模拟文件能力。
+- **范围**：不支持二进制 Workspace 上传；下载使用 `readFile` 字节，不依赖 daemon HTTP download token。
 
 ## 测试覆盖
 
@@ -178,7 +179,7 @@ Dashboard 遵守 Paseo 的协议兼容规则（见 `/root/workspace/code/paseo/d
 4. Dashboard 重连后检查：
    - Timeline 订阅生效（只接收选中 agent 事件）
    - Terminal restore 参数生效（不再收到 snapshot）
-   - Workspace 显示「文件」视图，文件变更能刷新内容
+   - Workspace 显示「文件」视图，文件变更能刷新内容，文本保存和条目操作可用
 
 **自动化测试**（已包含在 `test:dashboard`）：
 

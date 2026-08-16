@@ -561,7 +561,7 @@ button.dashboard-list-row:hover {
   flex: 1;
 }
 
-/* Read-only workspace file explorer. */
+/* Workspace file explorer. */
 .workspace-file-explorer {
   display: flex;
   flex: 1;
@@ -601,6 +601,26 @@ button.dashboard-list-row:hover {
   white-space: nowrap;
 }
 
+.workspace-file-tree-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.workspace-file-tree-target {
+  min-width: 0;
+  overflow: hidden;
+  margin-left: auto;
+  color: var(--foreground-faint);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workspace-file-tree-content {
   min-height: 0;
   overflow: auto;
@@ -628,6 +648,16 @@ button.dashboard-list-row:hover {
 .workspace-file-tree-row:hover {
   background: var(--surface-muted);
   color: var(--foreground);
+}
+
+.workspace-file-tree-row:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.workspace-file-tree-row:disabled:hover {
+  background: transparent;
+  color: var(--foreground-muted);
 }
 
 .workspace-file-tree-row.is-selected {
@@ -722,6 +752,13 @@ button.dashboard-list-row:hover {
   white-space: nowrap;
 }
 
+.workspace-file-viewer-header-tools {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
 .workspace-file-viewer-meta {
   display: inline-flex;
   flex: 0 0 auto;
@@ -729,6 +766,85 @@ button.dashboard-list-row:hover {
   color: var(--foreground-faint);
   font-size: 11px;
   white-space: nowrap;
+}
+
+.workspace-file-editor {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.workspace-file-conflict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 24%, var(--divider));
+  background: color-mix(in srgb, var(--danger) 7%, var(--surface-panel));
+  color: var(--foreground-muted);
+  font-size: 12px;
+}
+
+.workspace-file-conflict-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.workspace-file-editor-error {
+  padding: 8px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 24%, var(--divider));
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.workspace-file-editor-input {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  resize: none;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface-panel);
+  box-shadow: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+.workspace-file-editor-input:focus-visible {
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.workspace-file-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--divider);
+}
+
+.workspace-file-dialog-input {
+  width: 100%;
+  height: 36px;
+  margin-top: 14px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-panel);
+  color: var(--foreground);
+  font-size: var(--ui-font-size);
+  outline: none;
+}
+
+.workspace-file-dialog-input:focus {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--foreground) 12%, transparent);
 }
 
 .workspace-file-viewer-content {
@@ -755,8 +871,22 @@ button.dashboard-list-row:hover {
     border-bottom: 1px solid var(--divider);
   }
 
+  .workspace-file-viewer-header {
+    align-items: flex-start;
+  }
+
+  .workspace-file-viewer-header-tools {
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
   .workspace-file-viewer-meta {
     display: none;
+  }
+
+  .workspace-file-conflict {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

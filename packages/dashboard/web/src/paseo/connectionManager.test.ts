@@ -143,6 +143,22 @@ class FakeClient implements DaemonClientLike {
     throw new Error("not implemented in fake");
   }
 
+  writeFile(): never {
+    throw new Error("not implemented in fake");
+  }
+
+  createFileEntry(): never {
+    throw new Error("not implemented in fake");
+  }
+
+  renameFileEntry(): never {
+    throw new Error("not implemented in fake");
+  }
+
+  deleteFileEntry(): never {
+    throw new Error("not implemented in fake");
+  }
+
   emit(state: ConnectionState): void {
     this.state = state;
     for (const listener of this.listeners) listener(state);

@@ -9,7 +9,7 @@
 - **仓库**：Paseo monorepo fork — `git@github.com:PowerDi/paseo-dashboard.git`
 - **代码位置**：`/root/workspace/code/paseo/packages/dashboard/`
 - **Paseo 源码**：`/root/workspace/code/paseo/`（monorepo 根，作为行为事实来源）
-- **当前阶段**：P3.7.1 文件浏览器只读基础已完成，下一阶段是 P3.7.2 Git 状态与差异查看。
+- **当前阶段**：P3.7.1 文件浏览器与文本操作已完成，下一阶段是 P3.7.2 Git 状态与差异查看。
 - **当前分支**：`feat/dashboard-multi-user`。当前工作聚焦 P3.7 新增功能。
 
 ## Git 协作
@@ -43,14 +43,16 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 
 ## 当前状态
 
-### P3.7.1 文件浏览器只读基础（2026-08-16，已完成）
+### P3.7.1 文件浏览器与文本操作（2026-08-16，已完成）
 
 - Workspace 顶部增加「文件」视图；按当前 agent 的 `cwd` 懒加载目录树并先展示目录、再展示文件。
-- `DaemonClientLike` 与 `DashboardPaseoRuntime` 接入 `listDirectory`、`readFile`、`subscribeFile`，浏览器仍直接通过 Relay E2EE 连接 daemon。
-- 文件查看器只读取文本；图片和二进制文件显示不支持提示，不开放写入、删除、重命名、上传或下载。
-- 选中文本文件后建立文件订阅；版本变更时重新读取内容，切换文件或 workspace 时解除订阅并丢弃过期请求结果。
-- 目录读取、文件读取、文件缺失、订阅失败和 daemon 错误均有内联状态；runtime 调用路径加入单测。
-- 定向测试通过：Dashboard Web 的 runtime/connection/features 三个文件共 38 个用例，兼容性测试 18 个用例；根 `typecheck`、`lint` 通过。
+- `DaemonClientLike` 与 `DashboardPaseoRuntime` 接入目录浏览、文件读取/订阅、文本写入、创建条目、重命名和删除调用；浏览器仍直接通过 Relay E2EE 连接 daemon。
+- 文本文件可以进入编辑模式并带 `modifiedAt`/`revision` 保存。外部修改不会覆盖草稿，用户可重新加载或显式覆盖最新版本。
+- 文件树支持重命名和递归删除；文本上传限制为有效 UTF-8 且不超过 1 MiB，二进制 Workspace 上传暂不实现。
+- 文件下载通过 `readFile` 字节在浏览器生成，不依赖 daemon HTTP download token，因此 Relay-only Host 也使用同一数据路径。
+- 选中文件后建立文件订阅；版本变更时重新读取内容，切换文件或 workspace 时解除订阅并丢弃过期请求结果。
+- 目录读取、文件读取、保存冲突、mutation 失败、二进制/超限上传和订阅失败均有状态或错误反馈。
+- 定向测试通过：Dashboard Web 的 file-operations/runtime/connection/features 四个文件共 41 个用例。
 
 ### 权限卡片增强（2026-08-16，已提交）
 
@@ -286,7 +288,7 @@ npm run typecheck:dashboard
 
 ### 测试统计
 
-- web 单测 **130**（16 文件：dashboardRuntime 18、timeline-store 15、daemon-data-store 13、features 10、agent-tree 10、permission-request-form 8、app-store 9、terminalSession 8、connectionManager 7、live-activity 7、dashboardEvents 6、routes 5、format-time 4、diff-lines 4、code-language 3、dashboardApi 3）。
+- web 单测 **136**（17 文件：dashboardRuntime 20、timeline-store 15、daemon-data-store 13、features 11、agent-tree 10、permission-request-form 8、app-store 9、terminalSession 8、connectionManager 7、live-activity 7、dashboardEvents 6、routes 5、format-time 4、diff-lines 4、code-language 3、file-operations 3、dashboardApi 3）。
 - contract **112**（server-auth 16、server-security 16、server-events 15、server-hosts 13、server-devices-sessions 9、server-registration-policy 11、server-sync 8、server-abuse-protection 9、server-passkeys 4、server-auth-boundaries 5、server-host-import-isolation 1、auth 2、host-sync 3）+ e2e vitest **23**（connection-manager 4、offer-parser 3、compatibility 15、placeholder 1）= 静态统计 **265** 含 web。
 - Playwright 浏览器 E2E 3 测试（需 `PLAYWRIGHT_BROWSERS_PATH=/tmp/playwright-browsers`）。
 - **web 单测**：`packages/dashboard/web/package.json` 有 `test` 脚本，走该包自己的 `vite.config.ts`（`@` 指向 `web/src`）。根 `vitest.config.ts` 仍把 `@` 指到 `packages/app/src`，所以从仓库根直接 `npx vitest run packages/dashboard/web/src` 会错；用 `npm run test --workspace=@getpaseo/dashboard-web`。`test:dashboard` 现已包含 web。P3.5 兼容性测试 15 单测在 `tests/e2e/src/compatibility.vitest.test.ts`。
@@ -351,4 +353,5 @@ npm run typecheck:dashboard
 | 2026-08-16 | Codex            | P4.2 当前范围完成：device/session 增加截断 IP、User-Agent 摘要和认证方式；Web 增加 discoverable Passkey 注册、登录、列表和删除；challenge 哈希化、五分钟、单次消费并校验 RP/origin/UV/counter，credential 与 ceremony 有独立 abuse bucket。新增 6 个合同测试和 2 个 Web 单测，contract 106→112、web 128→130、静态总数 257→265。风险登录与新设备提示按用户决定暂缓，下一阶段 P4.3。                                                                                                                                                       |
 | 2026-08-16 | Codex            | P4.3 完成：版本化 KeyProvider 支持 file 与 AWS KMS data key；新增 key registry、加密 fingerprint secret、admin 状态/轮换 API、当前密码校验、IP 限流、日志脱敏和审计。轮换先切 active，再在线重包 encryptedDek，支持中断后从 decrypt-only 继续，完成后退休旧 key。新增 6 个合同测试，contract 112→118、静态总数 265→271；部署文档补 file/KMS 轮换和隔离恢复演练。                                                                                                                                                                         |
 | 2026-08-16 | Codex            | P4.4 完成：完成 HostGrant 逻辑模型和授权边界审查；owner 继续由 hosts.ownerUserId 定义，active grant 按 Host/用户唯一，撤销保留历史；admin 不自动获得 capability，operator/viewer 等待 daemon per-client scope、credential 和 revoke 支持。未新增 grant 表、API 或 UI。                                                                                                                                                                                                                                                                   |
+| 2026-08-16 | Codex            | P3.7.1 扩展完成：文件视图接入文本保存与 revision 冲突处理、重命名、递归删除、UTF-8 文本上传和基于 `readFile` 字节的下载；二进制 Workspace 上传、条目复制和新建目录 UI 暂缓。新增 file-operations 3 个测试，目标四文件 41 项通过。                                                                                                                                                                                                                                                                                                        |
 | 2026-08-16 | Codex            | 开发优先级调整：暂缓 P5.1 Harmony Runtime，回到 P3.7 新增功能；先实施 P3.7.1 文件浏览器只读基础，再做 Git 状态/差异查看，暂不并行开放文件写入或 Git push/merge。                                                                                                                                                                                                                                                                                                                                                                         |
