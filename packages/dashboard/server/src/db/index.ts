@@ -6,7 +6,9 @@ export function createDb(dataDir: string) {
   const sqlite = new Database(`${dataDir}/dashboard.db`);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
-  return drizzle(sqlite, { schema });
+  return Object.assign(drizzle(sqlite, { schema }), {
+    close: () => sqlite.close(),
+  });
 }
 
 export type Db = ReturnType<typeof createDb>;

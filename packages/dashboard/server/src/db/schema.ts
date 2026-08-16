@@ -116,6 +116,24 @@ export const hosts = sqliteTable("hosts", {
   deletedAt: text("deleted_at"),
 });
 
+export const encryptionKeyVersions = sqliteTable("encryption_key_versions", {
+  id: text("id").primaryKey(),
+  version: integer("version").notNull().unique(),
+  provider: text("provider", { enum: ["file", "aws-kms"] }).notNull(),
+  keyRef: text("key_ref").notNull(),
+  status: text("status", { enum: ["active", "decrypt_only", "retired"] }).notNull(),
+  createdAt: text("created_at").notNull(),
+  retiredAt: text("retired_at"),
+});
+
+export const encryptionSecrets = sqliteTable("encryption_secrets", {
+  id: text("id").primaryKey(),
+  encryptedValue: text("encrypted_value").notNull(),
+  nonce: text("nonce").notNull(),
+  authTag: text("auth_tag").notNull(),
+  keyVersion: text("key_version").notNull(),
+});
+
 export const hostConnections = sqliteTable("host_connections", {
   id: text("id").primaryKey(),
   hostId: text("host_id")
@@ -126,6 +144,7 @@ export const hostConnections = sqliteTable("host_connections", {
   encryptedPayload: text("encrypted_payload").notNull(),
   encryptedDek: text("encrypted_dek").notNull(),
   keyVersion: text("key_version").notNull(),
+  payloadKeyVersion: text("payload_key_version").notNull(),
   nonce: text("nonce").notNull(),
   authTag: text("auth_tag").notNull(),
 });

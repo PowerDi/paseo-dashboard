@@ -3,9 +3,6 @@ import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import { createDb } from "./db/index.js";
 import { ensureTables } from "./db/migrate.js";
-import { loadKek } from "./lib/kek.js";
-import { createHash } from "node:crypto";
-import { EnvelopeEncryptor } from "./lib/encryption.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerHostRoutes } from "./routes/hosts.js";
 import { registerSyncRoutes } from "./routes/sync.js";
@@ -15,22 +12,24 @@ import { registerEventRoutes } from "./routes/events.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerInvitationRoutes } from "./routes/invitations.js";
 import { registerPasskeyRoutes } from "./routes/passkeys.js";
+import { registerEncryptionKeyRoutes } from "./routes/encryption-keys.js";
 import { ConfigEventBus } from "./lib/event-bus.js";
 import { setupSecurity } from "./lib/security.js";
+import { EncryptionKeyManager } from "./lib/key-manager.js";
+import { createKeyProviderSet, type KeyProviderSet } from "./lib/key-provider.js";
 import type { ServerConfig } from "./config.js";
 
-export function buildApp(config: ServerConfig) {
-  // Data directory
+export interface BuildAppOptions {
+  keyProviders?: KeyProviderSet;
+}
+
+export function buildApp(config: ServerConfig, options: BuildAppOptions = {}) {
   ensureTables(config.dataDir);
   const db = createDb(config.dataDir);
-
-  // KEK + encryptor
-  const kek = loadKek(config.kekFile);
-  const encryptor = new EnvelopeEncryptor(kek);
-  const fingerprintSecret = createHash("sha256")
-    .update(kek)
-    .update("capability-fingerprint-v1")
-    .digest();
+  const keyManager = new EncryptionKeyManager(
+    db,
+    options.keyProviders ?? createKeyProviderSet(config),
+  );
 
   const app = Fastify({
     logger: {
@@ -41,6 +40,7 @@ export function buildApp(config: ServerConfig) {
           "req.headers.cookie",
           "req.body.password",
           "req.body.currentPassword",
+          "req.body.keyFile",
           "req.body.newPassword",
           "req.body.refreshToken",
           "req.body.inviteToken",
@@ -93,6 +93,13 @@ export function buildApp(config: ServerConfig) {
     });
   });
 
+  app.addHook("onReady", async () => {
+    await keyManager.initialize();
+  });
+  app.addHook("onClose", async () => {
+    db.close();
+  });
+
   // Security middleware (rate limit, Origin validation, CSP)
   const { rateLimits } = setupSecurity(app, config.corsOrigin, config.rateLimitEnabled);
 
@@ -104,8 +111,9 @@ export function buildApp(config: ServerConfig) {
   const eventBus = new ConfigEventBus();
   app.decorate("eventBus", eventBus);
   registerEventRoutes(app, db, eventBus);
-  registerHostRoutes(app, db, encryptor, fingerprintSecret, eventBus, rateLimits);
-  registerSyncRoutes(app, db, encryptor);
+  registerHostRoutes(app, db, keyManager, eventBus, rateLimits);
+  registerSyncRoutes(app, db, keyManager);
+  registerEncryptionKeyRoutes(app, db, keyManager);
   registerDeviceRoutes(app, db, eventBus);
   registerSessionRoutes(app, db, eventBus);
   registerAuditRoutes(app, db);

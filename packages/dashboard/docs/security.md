@@ -47,11 +47,19 @@
 - 为每个 HostConnection 生成随机 256-bit DEK。
 - 使用 AEAD（建议 AES-256-GCM 或平台审计过的等价方案）加密完整 capability JSON。
 - AAD 包含 schema version、`userId`、`hostId`、connection id 和 key version，防止密文换位。
-- 使用部署 KEK 包装 DEK。生产 KEK 来自 KMS/secret manager；简单自托管部署可由独立文件或环境 secret 提供，但不能与数据库/备份放在一起。
-- 数据库保存 `encryptedPayload`、`encryptedDek`、nonce/tag 和 `keyVersion`。
-- 去重使用服务端 secret 派生的 HMAC fingerprint，不使用裸 `serverId` 或公钥索引。
+- 使用部署 KEK 包装 DEK。生产支持 AWS KMS data key；简单自托管部署使用独立 32 字节文件，不能与数据库备份保存在同一位置。
+- 数据库保存 `encryptedPayload`、`encryptedDek`、nonce/tag、包装 `keyVersion` 和 payload AAD 的 `payloadKeyVersion`。轮换只重包 DEK，不重加密 payload。
+- key registry 只保存 provider/reference 和 `active`、`decrypt_only`、`retired` 状态。AWS KMS reference 是密文 blob；file reference 是外部路径。
+- 去重使用独立、加密保存的服务端 fingerprint secret。轮换会重包该 secret，不改变已有 fingerprint。
 
-### 泄露影响
+#### Key rotation 边界
+
+- 轮换接口仅允许 admin，并要求当前密码；请求按 IP 限流，`keyFile` 和密码从日志中脱敏。
+- active 切换与旧 key 进入 decrypt-only 在同一数据库事务完成。新写入不会继续使用旧版本。
+- 旧版本只有在 HostConnection 和服务端 secret 都不再引用后才能 retired。中断后必须保留旧 key，并从 decrypt-only 状态继续。
+- 审计只记录 provider、版本和重包数量，不记录 key reference、KEK、DEK 或 capability。
+
+## 泄露影响
 
 | 事件               | 影响                                                                                           |
 | ------------------ | ---------------------------------------------------------------------------------------------- |

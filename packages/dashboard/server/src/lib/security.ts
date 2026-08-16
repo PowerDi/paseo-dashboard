@@ -28,6 +28,7 @@ const DEFAULT_RATE_LIMITS = {
   "passkey.registration.ip": { maxRequests: 10, windowMs: 60_000 },
   "host.import.ip": { maxRequests: 20, windowMs: 60_000 },
   "host.import.account": { maxRequests: 10, windowMs: 60_000 },
+  "admin.encryption.rotate.ip": { maxRequests: 3, windowMs: 60_000 },
 } as const satisfies Record<string, RateLimitConfig>;
 
 export type RateLimitScope = keyof typeof DEFAULT_RATE_LIMITS;
@@ -64,6 +65,7 @@ const RATE_LIMIT_ROUTES: Record<string, RouteRateLimitPolicy> = {
   "POST:/api/v1/passkeys/registration/options": { ip: "passkey.registration.ip" },
   "POST:/api/v1/passkeys/registration/verify": { ip: "passkey.registration.ip" },
   "POST:/api/v1/hosts/import": { ip: "host.import.ip" },
+  "POST:/api/v1/admin/encryption-keys/rotate": { ip: "admin.encryption.rotate.ip" },
 };
 
 const STATE_CHANGING_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);

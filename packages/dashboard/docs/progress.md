@@ -9,7 +9,7 @@
 - **仓库**：Paseo monorepo fork — `git@github.com:PowerDi/paseo-dashboard.git`
 - **代码位置**：`/root/workspace/code/paseo/packages/dashboard/`
 - **Paseo 源码**：`/root/workspace/code/paseo/`（monorepo 根，作为行为事实来源）
-- **当前阶段**：P4.2 的 Passkey 与登录环境审计已完成；风险登录提示暂缓，下一阶段是 P4.3 生产密钥管理。
+- **当前阶段**：P4.3 生产密钥管理已完成；风险登录和新设备提示继续暂缓，下一阶段是 P4.4 HostGrant 模型审查。
 - **当前分支**：`feat/dashboard-multi-user`。注册邀请策略和 abuse 防护已分别提交到 `0ac903003`、`f1082fe09`。
 
 ## Git 协作
@@ -137,7 +137,7 @@ upstream  → https://github.com/getpaseo/paseo.git       (官方，拉更新用
 
 ### 待开始
 
-M3、P4.1 和 P4.2 当前范围已完成。Dashboard 不验证邮箱所有权；风险登录和新设备提示暂缓。
+M3、P4.1、P4.2 当前范围和 P4.3 已完成。Dashboard 不验证邮箱所有权；风险登录和新设备提示暂缓。
 
 已搁置，不阻塞 M3：
 
@@ -145,7 +145,7 @@ M3、P4.1 和 P4.2 当前范围已完成。Dashboard 不验证邮箱所有权；
 
 下一步：
 
-1. 进入 P4.3，设计生产 KMS、在线 key rotation 与备份恢复演练。
+1. 进入 P4.4，只做 `HostGrant` 数据模型和授权边界审查，不启用分享 UI 或虚假只读权限。
 2. 风险登录和新设备提示继续暂缓；需要恢复时直接从现有 `newDevice` 与登录环境审计事实接 UI。
 3. 密码恢复按未来本地管理员 recovery code/CLI 单独设计，不引入邮件服务。
 4. 权限卡片真实 provider 手工验证继续后置，不阻塞 P4。
@@ -241,14 +241,15 @@ npm run typecheck:dashboard
 ### 数据库
 
 - server 用 SQLite + Drizzle ORM（`better-sqlite3` 同步 API）。
-- server 启动时自动创建 `data/` 目录和表；开发 KEK 自动生成于 `data/.kek`。
-- DB 表：users, invitations, devices, sessions, passkeys, webauthn_challenges, hosts, host_connections, audit_events。
+- server 启动时自动创建 `data/` 目录和表；非 production 的 file provider 可自动生成 `data/.kek`，production 必须显式配置 file key 或 AWS KMS。
+- DB 表：users, invitations, devices, sessions, passkeys, webauthn_challenges, hosts, host_connections, encryption_key_versions, encryption_secrets, audit_events。
 - `db.transaction(cb)` 回调必须同步（不可 async）。
 
 ### 加密
 
-- 每行随机 256-bit DEK → AES-256-GCM 加密 payload → DEK 由 KEK 包装（AES-256-GCM），AAD 绑定 schema/user/host/conn/keyVersion。
-- capability fingerprint 使用 HMAC-SHA256（从 KEK 派生，域分离），不可逆。
+- 每行随机 256-bit DEK → AES-256-GCM 加密 payload → DEK 由版本化 KEK 包装（AES-256-GCM）；AAD 绑定 schema/user/host/conn/payloadKeyVersion。
+- `KeyProvider` 支持 file 与 AWS KMS。registry 保存 provider/reference 和 active/decrypt-only/retired 状态；轮换只重包 DEK，新写入在切换后使用 active 版本。
+- capability fingerprint 使用独立 secret；首次迁移保持旧派生值，后续随 key rotation 重包，不改变去重结果。
 
 ### Web 连接层
 
@@ -339,3 +340,4 @@ npm run typecheck:dashboard
 | 2026-08-16 | Codex            | P4.1 abuse 防护：注册/登录按 IP、normalized email、installation 分层限流，refresh 按 IP/credential hash，Host 导入按 IP/认证账号；bucket identity 只保留 SHA-256，query string 不再绕过匹配，429 返回 `Retry-After`。新增 7 个合同测试，contract 99→106，静态总数 250→257；重置密码防护随未来恢复 endpoint 实现。                                                                                                                                                                                                                        |
 | 2026-08-16 | Codex            | 产品决策收口：Dashboard 定位为自托管自用，不验证邮箱所有权，也不引入邮件找回。邮箱只作为登录标识和邀请匹配条件，邀请 token 的持有证明管理员授权；P4.1 据此完成，下一阶段转入 P4.2 session/device 风险审计与 Passkey。                                                                                                                                                                                                                                                                                                                    |
 | 2026-08-16 | Codex            | P4.2 当前范围完成：device/session 增加截断 IP、User-Agent 摘要和认证方式；Web 增加 discoverable Passkey 注册、登录、列表和删除；challenge 哈希化、五分钟、单次消费并校验 RP/origin/UV/counter，credential 与 ceremony 有独立 abuse bucket。新增 6 个合同测试和 2 个 Web 单测，contract 106→112、web 128→130、静态总数 257→265。风险登录与新设备提示按用户决定暂缓，下一阶段 P4.3。                                                                                                                                                       |
+| 2026-08-16 | Codex            | P4.3 完成：版本化 KeyProvider 支持 file 与 AWS KMS data key；新增 key registry、加密 fingerprint secret、admin 状态/轮换 API、当前密码校验、IP 限流、日志脱敏和审计。轮换先切 active，再在线重包 encryptedDek，支持中断后从 decrypt-only 继续，完成后退休旧 key。新增 6 个合同测试，contract 112→118、静态总数 265→271；部署文档补 file/KMS 轮换和隔离恢复演练。                                                                                                                                                                         |

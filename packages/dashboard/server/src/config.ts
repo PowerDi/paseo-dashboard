@@ -5,6 +5,9 @@ export interface ServerConfig {
   logLevel: string;
   corsOrigin: string;
   kekFile: string;
+  keyProvider?: "file" | "aws-kms";
+  awsKmsKeyId?: string;
+  awsKmsRegion?: string;
   accessTokenTtl: number; // access token 有效期（秒）
   refreshTokenTtl: number; // refresh token 有效期（秒）
   refreshTokenBytes: number;
@@ -32,6 +35,10 @@ function defaultWebAuthnRpId(origin: string): string {
 }
 
 export function loadConfig(): ServerConfig {
+  const keyProvider = process.env.PASEO_BOARD_KEY_PROVIDER || "file";
+  if (keyProvider !== "file" && keyProvider !== "aws-kms") {
+    throw new Error("PASEO_BOARD_KEY_PROVIDER 必须为 file 或 aws-kms");
+  }
   const corsOrigin = process.env.PASEO_BOARD_CORS_ORIGIN || "http://localhost:5173";
   const webauthnOrigin =
     process.env.PASEO_BOARD_WEBAUTHN_ORIGIN || defaultWebAuthnOrigin(corsOrigin);
@@ -42,6 +49,9 @@ export function loadConfig(): ServerConfig {
     logLevel: process.env.PASEO_BOARD_LOG_LEVEL || "info",
     corsOrigin,
     kekFile: process.env.PASEO_BOARD_KEK_FILE || "",
+    keyProvider,
+    awsKmsKeyId: process.env.PASEO_BOARD_AWS_KMS_KEY_ID,
+    awsKmsRegion: process.env.PASEO_BOARD_AWS_KMS_REGION,
     accessTokenTtl: 900, // 15 min
     refreshTokenTtl: 7 * 24 * 3600, // 7 days
     refreshTokenBytes: 32,

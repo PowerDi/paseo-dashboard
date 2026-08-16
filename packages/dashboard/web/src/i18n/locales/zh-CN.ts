@@ -241,6 +241,7 @@ export default {
       "user.password_changed": "密码已修改",
       "host.updated": "主机已改名",
       "host.deleted": "主机已删除",
+      "encryption_key.rotated": "加密密钥已轮换",
     },
   },
   importHost: {

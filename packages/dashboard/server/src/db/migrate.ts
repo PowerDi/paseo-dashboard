@@ -111,6 +111,26 @@ export function ensureTables(dataDir: string) {
     CREATE INDEX IF NOT EXISTS hosts_idem_idx ON hosts(owner_user_id, idempotency_key);
     CREATE INDEX IF NOT EXISTS hosts_sync_revision_idx ON hosts(owner_user_id, last_sync_revision);
 
+    CREATE TABLE IF NOT EXISTS encryption_key_versions (
+      id TEXT PRIMARY KEY,
+      version INTEGER NOT NULL UNIQUE,
+      provider TEXT NOT NULL CHECK(provider IN ('file','aws-kms')),
+      key_ref TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('active','decrypt_only','retired')),
+      created_at TEXT NOT NULL,
+      retired_at TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS encryption_key_active_idx
+      ON encryption_key_versions(status) WHERE status = 'active';
+
+    CREATE TABLE IF NOT EXISTS encryption_secrets (
+      id TEXT PRIMARY KEY,
+      encrypted_value TEXT NOT NULL,
+      nonce TEXT NOT NULL,
+      auth_tag TEXT NOT NULL,
+      key_version TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS host_connections (
       id TEXT PRIMARY KEY,
       host_id TEXT NOT NULL UNIQUE REFERENCES hosts(id),
@@ -118,6 +138,7 @@ export function ensureTables(dataDir: string) {
       encrypted_payload TEXT NOT NULL,
       encrypted_dek TEXT NOT NULL,
       key_version TEXT NOT NULL,
+      payload_key_version TEXT NOT NULL,
       nonce TEXT NOT NULL,
       auth_tag TEXT NOT NULL
     );
@@ -187,6 +208,12 @@ export function ensureTables(dataDir: string) {
     db.exec(
       "ALTER TABLE devices ADD COLUMN last_auth_method TEXT CHECK(last_auth_method IN ('password','passkey'))",
     );
+  }
+
+  const connectionCols = db.pragma("table_info(host_connections)") as Array<{ name: string }>;
+  if (!connectionCols.some((col) => col.name === "payload_key_version")) {
+    db.exec("ALTER TABLE host_connections ADD COLUMN payload_key_version TEXT NOT NULL DEFAULT ''");
+    db.exec("UPDATE host_connections SET payload_key_version = key_version");
   }
 
   // Idempotent migration: add last_sync_revision column to existing databases.

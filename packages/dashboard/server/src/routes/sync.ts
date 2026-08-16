@@ -3,11 +3,11 @@ import { eq, and, gt, asc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import { badRequest } from "../lib/http.js";
 import { hosts, hostConnections, users, devices } from "../db/schema.js";
-import { EnvelopeEncryptor } from "../lib/encryption.js";
+import type { EncryptionKeyManager } from "../lib/key-manager.js";
 import type { Db } from "../db/index.js";
 import type { SyncChange } from "@getpaseo/dashboard-shared";
 
-export function registerSyncRoutes(app: FastifyInstance, db: Db, encryptor: EnvelopeEncryptor) {
+export function registerSyncRoutes(app: FastifyInstance, db: Db, keyManager: EncryptionKeyManager) {
   const auth = requireAuth(db);
 
   // GET /api/v1/host-sync?after=N&limit=100
@@ -73,14 +73,16 @@ export function registerSyncRoutes(app: FastifyInstance, db: Db, encryptor: Enve
         let connection: Record<string, unknown>;
         try {
           connection = JSON.parse(
-            encryptor.decrypt(
+            keyManager.decrypt(
               {
                 payload: conn.encryptedPayload,
                 dek: conn.encryptedDek,
                 nonce: conn.nonce,
                 tag: conn.authTag,
+                keyVersion: conn.keyVersion,
+                payloadKeyVersion: conn.payloadKeyVersion,
               },
-              { userId, hostId: h.id, connId: conn.id, keyVersion: conn.keyVersion },
+              { userId, hostId: h.id, connId: conn.id },
             ),
           );
         } catch {

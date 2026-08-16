@@ -18,6 +18,11 @@
       "types": "./src/lib/event-bus.ts",
       "source": "./src/lib/event-bus.ts",
       "default": "./src/lib/event-bus.ts"
+    },
+    "./lib/key-provider": {
+      "types": "./src/lib/key-provider.ts",
+      "source": "./src/lib/key-provider.ts",
+      "default": "./src/lib/key-provider.ts"
     }
   },
   "scripts": {
@@ -27,6 +32,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "^3.1111.0",
     "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^10.0.0",
     "@getpaseo/dashboard-shared": "*",

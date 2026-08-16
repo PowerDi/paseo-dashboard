@@ -421,21 +421,22 @@
 - Passkey 与密码登录共存；真实 P-256 assertion、错误密码、错误 origin、跨 session challenge、重放和跨用户删除均有合同测试。
 - Passkey ceremony 有独立 IP/credential 限流测试。
 
-### P4.3 生产密钥管理
+### P4.3 生产密钥管理（完成）
 
 **任务**
 
-1. 生产 KMS 集成（替代本地 key file）。
-2. 在线 key rotation：新写入用 active key，后台重包 `encryptedDek`，旧 key decrypt-only，完成后 retiring。
-3. 备份/恢复演练。
+1. **完成**：版本化 `KeyProvider`，支持独立 file key 和 AWS KMS data key；production file 模式缺少显式 key 时拒绝启动。
+2. **完成**：在线 key rotation。active 原子切换后，新写入使用新版本；旧版本 decrypt-only，逐条重包 `encryptedDek` 后 retired；中断状态可继续。
+3. **完成**：file/AWS KMS 恢复路径和隔离恢复演练写入部署文档。
 
 **产出**
 
-- KMS 集成与 rotation 工具。
+- `encryption_key_versions` registry、加密 fingerprint secret、admin rotation/status API 和审计事件。
+- AWS KMS provider 与 file provider 轮换工具。
 
 **验证**
 
-- rotation 不停机；旧 key 退休前 decrypt-only 生效。
+- 合同测试覆盖 file 在线轮换、旧 key 退休后恢复、旧数据库迁移、中断轮换继续、AWS KMS 密文 reference 重启解密和轮换接口限流。
 
 ### P4.4 HostGrant 模型审查
 

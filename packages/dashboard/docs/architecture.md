@@ -221,7 +221,8 @@ server   ──X Paseo client/Relay/daemon
 | `kind`                          | `relay`；MVP 只同步可跨设备使用的连接 |
 | `encryptedPayload`              | 完整规范化 connection 的 AEAD 密文    |
 | `encryptedDek`                  | 被 KEK 包装的行级/Host 级 DEK         |
-| `keyVersion`                    | `EncryptionKeyVersion` FK             |
+| `keyVersion`                    | 当前包装 `encryptedDek` 的 key 版本   |
+| `payloadKeyVersion`             | payload AAD 使用的原始 key 版本       |
 | `nonce/authTag`                 | 加密元数据                            |
 | `createdAt/updatedAt/deletedAt` | 生命周期                              |
 
@@ -266,14 +267,15 @@ server   ──X Paseo client/Relay/daemon
 
 ### EncryptionKeyVersion
 
-| 字段                  | 说明                                  |
-| --------------------- | ------------------------------------- | ------------ | -------- |
-| `id/version`          | 主键和单调版本                        |
-| `kmsKeyRef`           | secret manager/KMS 引用，不是原始 KEK |
-| `status`              | `active                               | decrypt_only | retired` |
-| `createdAt/retiredAt` | 轮换生命周期                          |
+| 字段                  | 说明                                                  |
+| --------------------- | ----------------------------------------------------- |
+| `id/version`          | 主键和单调版本                                        |
+| `provider`            | `file` 或 `aws-kms`                                   |
+| `keyRef`              | 文件路径或 KMS 加密后的 data-key blob；不保存原始 KEK |
+| `status`              | `active`、`decrypt_only` 或 `retired`                 |
+| `createdAt/retiredAt` | 轮换生命周期                                          |
 
-轮换采用新写入用 active key、后台重包 `encryptedDek`、旧 key 保持 decrypt-only，完成后再 retired。
+轮换先原子切换 active key，使新写入立即使用新版本，再逐条重包 `encryptedDek`。payload 不重加密，所以 `payloadKeyVersion` 保留原值；重包完成并确认旧版本没有连接或服务端 secret 引用后，旧 key 才进入 retired。进程中断会保留 active/decrypt-only 状态，管理员再次调用轮换接口继续剩余重包。
 
 ## 删除语义
 
@@ -344,7 +346,12 @@ GET    /api/v1/hosts
 POST   /api/v1/hosts/import
 PATCH  /api/v1/hosts/{hostId}
 DELETE /api/v1/hosts/{hostId}
+
+GET  /api/v1/admin/encryption-keys
+POST /api/v1/admin/encryption-keys/rotate
 ```
+
+加密 key 接口仅允许 admin。轮换需要当前密码；file provider 还需要一个新的 32 字节 key 文件路径，AWS KMS provider 由服务端生成新的 data key。状态响应不返回 `keyRef`。
 
 ```json
 // import request：客户端已完成 Relay/E2EE 验证

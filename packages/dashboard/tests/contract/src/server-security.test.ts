@@ -40,6 +40,17 @@ function makeConnection(serverId: string) {
   };
 }
 
+function collectObjectKeys(value: unknown): string[] {
+  if (!value || typeof value !== "object") return [];
+  const keys: string[] = [];
+  const entries = Array.isArray(value) ? value.entries() : Object.entries(value);
+  for (const [key, nested] of entries) {
+    if (typeof key === "string") keys.push(key);
+    for (const nestedKey of collectObjectKeys(nested)) keys.push(nestedKey);
+  }
+  return keys;
+}
+
 describe("Security hardening (P2.4)", () => {
   let app: ReturnType<typeof buildApp>;
   let cleanup: () => void;
@@ -308,11 +319,15 @@ describe("Security hardening (P2.4)", () => {
     const events = res.json().events;
     for (const e of events) {
       const metaStr = JSON.stringify(e.metadata);
-      // No passwords, tokens, or connection data in audit metadata
-      expect(metaStr).not.toContain("password");
-      expect(metaStr).not.toContain("token");
-      expect(metaStr).not.toContain("daemonPublicKey");
-      expect(metaStr).not.toContain("relayEndpoint");
+      const metadataKeys = collectObjectKeys(e.metadata);
+      // authMethod may safely be "password"; secret-bearing fields and values may not appear.
+      expect(metadataKeys).not.toContain("password");
+      expect(metadataKeys).not.toContain("passwordHash");
+      expect(metadataKeys).not.toContain("token");
+      expect(metadataKeys).not.toContain("daemonPublicKeyB64");
+      expect(metadataKeys).not.toContain("relayEndpoint");
+      expect(metaStr).not.toContain("password-A-123");
+      expect(metaStr).not.toContain("password-B-123");
     }
   });
 });

@@ -243,6 +243,7 @@ const en: typeof zhCN = {
       "user.password_changed": "Password changed",
       "host.updated": "Host renamed",
       "host.deleted": "Host deleted",
+      "encryption_key.rotated": "Encryption key rotated",
     },
   },
   importHost: {

@@ -24,55 +24,99 @@ node server/dist/index.js
 
 ## 2. 环境变量
 
-| 变量                             | 必填   | 默认值                      | 说明                                                  |
-| -------------------------------- | ------ | --------------------------- | ----------------------------------------------------- |
-| `PASEO_BOARD_HOST`               | 否     | `127.0.0.1`                 | 监听地址，生产应设为 `0.0.0.0` 或反代后端地址         |
-| `PASEO_BOARD_PORT`               | 否     | `3000`                      | 监听端口                                              |
-| `PASEO_BOARD_DATA_DIR`           | 是     | `./data`                    | 数据目录（SQLite + KEK），应挂载到持久卷              |
-| `PASEO_BOARD_KEK_FILE`           | **是** | 空（开发自动生成）          | 32 字节 KEK 密钥文件路径，权限必须 `0600`             |
-| `PASEO_BOARD_CORS_ORIGIN`        | 否     | `http://localhost:5173`     | 前端域名                                              |
-| `PASEO_BOARD_REGISTRATION_OPEN`  | 否     | `true`                      | 是否允许首用户之后的公开注册                          |
-| `PASEO_BOARD_LOG_LEVEL`          | 否     | `info`                      | 日志级别                                              |
-| `PASEO_BOARD_RATE_LIMIT_ENABLED` | 否     | `true`                      | 是否启用内存限流；生产不要关闭                        |
-| `PASEO_BOARD_TRUSTED_PROXIES`    | 否     | 空                          | 反代 IP，逗号分隔，如 `10.0.0.1,10.0.0.2`             |
-| `PASEO_BOARD_WEBAUTHN_ORIGIN`    | 否     | 与 CORS origin 相同         | WebAuthn 页面 origin，例如 `https://dash.example.com` |
-| `PASEO_BOARD_WEBAUTHN_RP_ID`     | 否     | WebAuthn origin 的 hostname | WebAuthn RP ID，例如 `dash.example.com`               |
-| `PASEO_BOARD_WEBAUTHN_RP_NAME`   | 否     | `Paseo Dashboard`           | 浏览器 Passkey 提示中显示的服务名                     |
+| 变量                             | 必填 | 默认值                      | 说明                                                  |
+| -------------------------------- | ---- | --------------------------- | ----------------------------------------------------- |
+| `PASEO_BOARD_HOST`               | 否   | `127.0.0.1`                 | 监听地址，生产应设为 `0.0.0.0` 或反代后端地址         |
+| `PASEO_BOARD_PORT`               | 否   | `3000`                      | 监听端口                                              |
+| `PASEO_BOARD_DATA_DIR`           | 是   | `./data`                    | 数据目录（SQLite + key registry），应挂载到持久卷     |
+| `PASEO_BOARD_KEY_PROVIDER`       | 否   | `file`                      | `file` 或 `aws-kms`                                   |
+| `PASEO_BOARD_KEK_FILE`           | 条件 | 空（仅开发自动生成）        | file provider 的 32 字节 KEK 路径，权限必须 `0600`    |
+| `PASEO_BOARD_AWS_KMS_KEY_ID`     | 条件 | 空                          | aws-kms provider 使用的 KMS key id 或 alias           |
+| `PASEO_BOARD_AWS_KMS_REGION`     | 否   | SDK 默认 region             | AWS KMS region                                        |
+| `PASEO_BOARD_CORS_ORIGIN`        | 否   | `http://localhost:5173`     | 前端域名                                              |
+| `PASEO_BOARD_REGISTRATION_OPEN`  | 否   | `true`                      | 是否允许首用户之后的公开注册                          |
+| `PASEO_BOARD_LOG_LEVEL`          | 否   | `info`                      | 日志级别                                              |
+| `PASEO_BOARD_RATE_LIMIT_ENABLED` | 否   | `true`                      | 是否启用内存限流；生产不要关闭                        |
+| `PASEO_BOARD_TRUSTED_PROXIES`    | 否   | 空                          | 反代 IP，逗号分隔，如 `10.0.0.1,10.0.0.2`             |
+| `PASEO_BOARD_WEBAUTHN_ORIGIN`    | 否   | 与 CORS origin 相同         | WebAuthn 页面 origin，例如 `https://dash.example.com` |
+| `PASEO_BOARD_WEBAUTHN_RP_ID`     | 否   | WebAuthn origin 的 hostname | WebAuthn RP ID，例如 `dash.example.com`               |
+| `PASEO_BOARD_WEBAUTHN_RP_NAME`   | 否   | `Paseo Dashboard`           | 浏览器 Passkey 提示中显示的服务名                     |
 
 ## 3. KEK 管理
 
-### 生成 KEK
+Dashboard 使用版本化 `KeyProvider`。数据库只保存 key 版本、provider 和引用；不保存 file KEK 原文或 AWS KMS data key 明文。
+
+### file provider
+
+本地自托管可使用独立 32 字节文件：
 
 ```bash
-# 生成 32 字节随机密钥
-head -c 32 /dev/urandom > /path/to/kek
-chmod 600 /path/to/kek
+head -c 32 /dev/urandom > /run/secrets/paseo-dashboard-k1
+chmod 600 /run/secrets/paseo-dashboard-k1
 ```
+
+```bash
+export NODE_ENV=production
+export PASEO_BOARD_KEY_PROVIDER=file
+export PASEO_BOARD_KEK_FILE=/run/secrets/paseo-dashboard-k1
+```
+
+生产环境缺少 `PASEO_BOARD_KEK_FILE` 时拒绝启动。文件不存在、长度不是 32 字节或 group/other 权限不为零时也拒绝启动。非 production 且未配置文件时，服务端在 `PASEO_BOARD_DATA_DIR/.kek` 生成开发 key 并打印警告。
+
+每个 key 版本使用不同的绝对路径。不要覆盖当前文件；中断轮换时，decrypt-only 版本仍需要旧文件。
+
+### AWS KMS provider
+
+```bash
+export NODE_ENV=production
+export PASEO_BOARD_KEY_PROVIDER=aws-kms
+export PASEO_BOARD_AWS_KMS_KEY_ID=alias/paseo-dashboard
+export PASEO_BOARD_AWS_KMS_REGION=us-east-1
+```
+
+服务端用 KMS `GenerateDataKey` 创建 256-bit data key，并把 KMS 返回的密文 blob 保存为 `keyRef`。启动和解密时用相同 encryption context 调用 KMS；运行身份需要生成和解密 data key 的权限。数据库泄露不包含 data key 明文。
 
 ### 启动检查
 
-服务端启动时：
+启动时必须满足：
 
-- 如果 `PASEO_BOARD_KEK_FILE` 指定的文件不存在 → 拒绝启动
-- 如果文件权限不是 `0600` → 拒绝启动
-- 如果文件长度不是 32 字节 → 拒绝启动
-- 如果未设置 `PASEO_BOARD_KEK_FILE` → 开发模式自动生成，打印 WARN
+- key registry 恰好有一个 `active` 版本；
+- `active` 和 `decrypt_only` 版本都能由记录中的 provider/reference 解析；
+- `retired` 版本不再加载，因此其旧文件可在确认退休后移除；
+- 旧数据库首次启动会登记现有 key 为 `k1`，并补齐 payload AAD 版本，不重加密 payload。
 
-### 备份恢复
+### 在线轮换
 
-- **必须同时备份**：KEK 文件 + SQLite 数据库（`data/dashboard.db`）
-- 仅有数据库无法恢复 capability（envelope encryption）
-- 仅有 KEK 无法获取任何数据
-- 恢复步骤：将 KEK 文件和数据库放回对应路径，确保权限 `0600`，启动服务
+先以 admin 登录并保存 HttpOnly session cookie。状态接口不返回 key reference：
 
-### KEK 轮换（未来）
+```bash
+curl --fail-with-body -b cookies.txt   https://dashboard.example.com/api/v1/admin/encryption-keys
+```
 
-当前版本不支持在线 KEK 轮换。P4.3 将实现：
+file provider 先创建新文件，再提交当前密码和新路径。不要在共享 shell history 中直接写密码；下面的 payload 文件权限必须为 `0600`，请求后立即删除：
 
-- 新写入使用 active key
-- 后台重包旧 `encryptedDek`
-- 旧 key 标记 decrypt-only
-- 重包完成后退休旧 key
+```bash
+head -c 32 /dev/urandom > /run/secrets/paseo-dashboard-k2
+chmod 600 /run/secrets/paseo-dashboard-k2
+
+umask 077
+cat > /tmp/paseo-key-rotate.json <<'JSON'
+{"currentPassword":"ADMIN_CURRENT_PASSWORD","keyFile":"/run/secrets/paseo-dashboard-k2"}
+JSON
+curl --fail-with-body -b cookies.txt   -H 'Content-Type: application/json'   --data-binary @/tmp/paseo-key-rotate.json   https://dashboard.example.com/api/v1/admin/encryption-keys/rotate
+rm -f /tmp/paseo-key-rotate.json
+```
+
+AWS KMS provider 的请求只提交 `currentPassword`；服务端生成新 data key。
+
+轮换按以下顺序执行：
+
+1. 当前 active 变为 `decrypt_only`，新版本变为 `active`；新 Host 立即使用新版本。
+2. 服务端逐条解包并重包 `encryptedDek`，不重加密 capability payload；每条后让出事件循环，读写请求可以继续。
+3. capability fingerprint secret 重包到新版本，去重值保持不变。
+4. 旧版本没有连接或 secret 引用后标记 `retired`，记录 `encryption_key.rotated` 审计事件。
+
+如果进程在重包期间中断，registry 保留 active/decrypt-only 状态。重新启动后再次调用同一轮换接口；file provider 在已有 decrypt-only 版本时可以省略 `keyFile`，服务端继续剩余重包。只有状态显示旧版本为 `retired` 且 `encryptedConnectionCount` 为 0 后，才能删除旧 key 文件。
 
 ## 4. 反向代理（nginx 示例）
 
@@ -132,28 +176,35 @@ server {
 
 ## 6. 数据备份
 
-需要备份的文件：
+始终备份 `PASEO_BOARD_DATA_DIR/dashboard.db`。复制前停止 Dashboard server，或使用 SQLite 在线备份机制，不能只复制仍有未 checkpoint WAL 的主数据库文件。
 
-| 文件                   | 内容                               | 敏感度                |
-| ---------------------- | ---------------------------------- | --------------------- |
-| `PASEO_BOARD_KEK_FILE` | KEK 密钥                           | 密码级，权限 `0600`   |
-| `data/dashboard.db`    | SQLite 数据库（含加密 capability） | 敏感，与 KEK 分开存储 |
+provider 还需要以下恢复材料：
 
-**不要备份**：
+| provider  | 恢复材料                                                                |
+| --------- | ----------------------------------------------------------------------- |
+| `file`    | 所有 `active`/`decrypt_only` 版本的 key 文件；路径按 registry 记录恢复  |
+| `aws-kms` | 可访问原 KMS key 的运行身份和 region；加密 data-key blob 已随数据库备份 |
 
-- `node_modules/`、`dist/`（可从源码重建）
-- `data/.kek`（开发 KEK，生产用 `PASEO_BOARD_KEK_FILE`）
+file key 与数据库分开加密保存。不要备份 `node_modules/` 或 `dist/`。开发用 `data/.kek` 只有在需要恢复该开发数据库时才与生产 key 相同对待。
 
-备份策略：
+### 恢复演练
 
-- KEK 和数据库**分开存储**在不同物理位置
-- 备份加密
-- 定期验证恢复
+每次轮换后执行一次隔离恢复：
+
+1. 把数据库副本恢复到独立 `PASEO_BOARD_DATA_DIR`。
+2. file provider 按原路径挂载当前 active key；AWS KMS provider 使用能解密原 blob 的身份。
+3. 启动 server，确认 key 状态只有一个 active，且没有无法解析的 decrypt-only 版本。
+4. 用测试账号列出并解密轮换前后的 Host，再验证相同 capability 仍被判定为重复。
+5. 记录演练日期、备份版本和结果；不要把密码、key reference 或 capability 写入记录。
+
+只有数据库无法恢复 capability。只有 file key 或 KMS 权限也无法恢复业务数据。
 
 ## 7. 安全检查清单
 
-- [ ] KEK 文件权限为 `0600`
-- [ ] KEK 与数据库存储在不同位置
+- [ ] `NODE_ENV=production`，且 KeyProvider 配置完整
+- [ ] file key 权限为 `0600`、每个版本路径不同，并与数据库分开保存
+- [ ] AWS KMS 运行身份只具备所需 key 的 data-key 生成/解密权限
+- [ ] 已完成包含 active/decrypt-only key 的恢复演练
 - [ ] 按部署策略设置 `PASEO_BOARD_REGISTRATION_OPEN`；关闭时使用 admin 邀请新增用户
 - [ ] 反向代理启用 TLS
 - [ ] WebAuthn origin/RP ID 与浏览器实际 HTTPS 域名一致

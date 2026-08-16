@@ -4,22 +4,16 @@ import { newId } from "../lib/id.js";
 import { requireAuth } from "../lib/auth.js";
 import { badRequest, notFound, conflict, internal, rateLimited } from "../lib/http.js";
 import { hosts, hostConnections, users, auditEvents } from "../db/schema.js";
-import { EnvelopeEncryptor, capabilityFingerprint } from "../lib/encryption.js";
+import type { EncryptionKeyManager } from "../lib/key-manager.js";
 import { ErrorCodes } from "@getpaseo/dashboard-shared";
 import type { Db } from "../db/index.js";
 import type { ConfigEventBus } from "../lib/event-bus.js";
 import type { RateLimits } from "../lib/security.js";
 
-/**
- * Derive a domain-separated HMAC secret from the KEK for capability
- * fingerprinting. This is NOT the KEK itself — it cannot decrypt anything.
- */
-
 export function registerHostRoutes(
   app: FastifyInstance,
   db: Db,
-  encryptor: EnvelopeEncryptor,
-  fingerprintSecret: Buffer,
+  keyManager: EncryptionKeyManager,
   eventBus: ConfigEventBus,
   rateLimits: RateLimits,
 ) {
@@ -74,7 +68,7 @@ export function registerHostRoutes(
       daemonPublicKeyB64: connection.daemonPublicKeyB64,
     });
 
-    const fp = capabilityFingerprint(fingerprintSecret, connectionJson);
+    const fp = keyManager.fingerprint(connectionJson);
     const now = new Date().toISOString();
 
     // Idempotency check: if this user already imported with the same key,
@@ -102,14 +96,16 @@ export function registerHostRoutes(
       let existingConnection;
       try {
         existingConnection = JSON.parse(
-          encryptor.decrypt(
+          keyManager.decrypt(
             {
               payload: conn.encryptedPayload,
               dek: conn.encryptedDek,
               nonce: conn.nonce,
               tag: conn.authTag,
+              keyVersion: conn.keyVersion,
+              payloadKeyVersion: conn.payloadKeyVersion,
             },
-            { userId, hostId: existing.id, connId: conn.id, keyVersion: conn.keyVersion },
+            { userId, hostId: existing.id, connId: conn.id },
           ),
         );
       } catch {
@@ -155,14 +151,7 @@ export function registerHostRoutes(
 
     const hostId = newId("hst");
     const connId = newId("conn");
-    const keyVersion = "k1";
-
-    const enc = encryptor.encrypt(connectionJson, {
-      userId,
-      hostId,
-      connId,
-      keyVersion,
-    });
+    const enc = keyManager.encrypt(connectionJson, { userId, hostId, connId });
 
     db.transaction((tx) => {
       tx.insert(hosts)
@@ -186,7 +175,8 @@ export function registerHostRoutes(
           kind: "relay",
           encryptedPayload: enc.payload,
           encryptedDek: enc.dek,
-          keyVersion,
+          keyVersion: enc.keyVersion,
+          payloadKeyVersion: enc.payloadKeyVersion,
           nonce: enc.nonce,
           authTag: enc.tag,
         })
@@ -258,14 +248,16 @@ export function registerHostRoutes(
       let connection;
       try {
         connection = JSON.parse(
-          encryptor.decrypt(
+          keyManager.decrypt(
             {
               payload: conn.encryptedPayload,
               dek: conn.encryptedDek,
               nonce: conn.nonce,
               tag: conn.authTag,
+              keyVersion: conn.keyVersion,
+              payloadKeyVersion: conn.payloadKeyVersion,
             },
-            { userId, hostId: h.id, connId: conn.id, keyVersion: conn.keyVersion },
+            { userId, hostId: h.id, connId: conn.id },
           ),
         );
       } catch {
@@ -358,14 +350,16 @@ export function registerHostRoutes(
     let connection;
     try {
       connection = JSON.parse(
-        encryptor.decrypt(
+        keyManager.decrypt(
           {
             payload: conn.encryptedPayload,
             dek: conn.encryptedDek,
             nonce: conn.nonce,
             tag: conn.authTag,
+            keyVersion: conn.keyVersion,
+            payloadKeyVersion: conn.payloadKeyVersion,
           },
-          { userId, hostId: id, connId: conn.id, keyVersion: conn.keyVersion },
+          { userId, hostId: id, connId: conn.id },
         ),
       );
     } catch {
