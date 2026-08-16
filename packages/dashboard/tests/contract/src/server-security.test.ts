@@ -46,6 +46,7 @@ describe("Security hardening (P2.4)", () => {
   let cookieA: { name: string; value: string };
   let cookieB: { name: string; value: string };
   let hostIdA: string;
+  let sessionIdA: string;
 
   beforeAll(async () => {
     const cfg = makeTestConfig();
@@ -93,6 +94,14 @@ describe("Security hardening (P2.4)", () => {
     });
     expect(importRes.statusCode).toBe(200);
     hostIdA = importRes.json().host.id;
+
+    const sessionsA = await app.inject({
+      method: "GET",
+      url: "/api/v1/sessions",
+      cookies: { [cookieA.name]: cookieA.value },
+    });
+    expect(sessionsA.statusCode).toBe(200);
+    sessionIdA = sessionsA.json()[0].id;
   });
 
   afterAll(async () => {
@@ -180,6 +189,25 @@ describe("Security hardening (P2.4)", () => {
     const res = await app.inject({
       method: "DELETE",
       url: `/api/v1/devices/${devA.id}`,
+      cookies: { [cookieB.name]: cookieB.value },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("user B cannot see user A's sessions", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/sessions",
+      cookies: { [cookieB.name]: cookieB.value },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().some((session: { id: string }) => session.id === sessionIdA)).toBe(false);
+  });
+
+  it("user B cannot revoke user A's session", async () => {
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/sessions/${sessionIdA}`,
       cookies: { [cookieB.name]: cookieB.value },
     });
     expect(res.statusCode).toBe(404);

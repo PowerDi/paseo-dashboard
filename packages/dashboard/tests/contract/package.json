@@ -12,6 +12,8 @@
     "@getpaseo/dashboard-shared": "*"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "better-sqlite3": "^13.0.3",
     "typescript": "^5.5.0",
     "vitest": "^4.1.10"
   }

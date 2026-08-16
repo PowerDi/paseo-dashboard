@@ -23,7 +23,7 @@ export function registerSessionRoutes(app: FastifyInstance, db: Db, eventBus: Co
         deviceName: devices.displayName,
       })
       .from(sessions)
-      .innerJoin(devices, eq(sessions.deviceId, devices.id))
+      .innerJoin(devices, and(eq(sessions.deviceId, devices.id), eq(devices.userId, userId)))
       .where(eq(sessions.userId, userId));
 
     const result: (Session & { isCurrentSession: boolean })[] = rows

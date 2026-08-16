@@ -104,7 +104,7 @@ MVP 选择 **服务端可解密的 envelope encryption**，原因是账号恢复
 
 ### Dashboard 层
 
-- session 撤销：立即拒绝 refresh；短时 access token 通过短 TTL 或 session lookup 失效。
+- session 撤销：立即拒绝 refresh；每次受保护请求都会查 session、账户和设备状态，因此撤销或停用不依赖 access token 自然过期。
 - 设备撤销：撤销设备全部 session，记录审计事件。
 - Host 删除：同步 tombstone，阻止未来下载，清除服务端密文。
 - 账户删除：撤销所有 session，清除 capability 和个人数据。

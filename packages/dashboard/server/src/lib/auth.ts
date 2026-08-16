@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { createHash, randomBytes } from "node:crypto";
 import { eq, and, isNull } from "drizzle-orm";
 import { unauthorized } from "./http.js";
-import { sessions } from "../db/schema.js";
+import { devices, sessions, users } from "../db/schema.js";
 import type { Db } from "../db/index.js";
 
 export const SESSION_COOKIE = "paseo_session";
@@ -60,9 +60,29 @@ export function refreshTokenFrom(req: FastifyRequest): string | null {
   return null;
 }
 
+/** A session is usable only while its account and owning device remain active. */
+export async function isSessionPrincipalActive(
+  db: Db,
+  userId: string,
+  deviceId: string,
+): Promise<boolean> {
+  const rows = await db
+    .select({ userId: users.id })
+    .from(users)
+    .innerJoin(
+      devices,
+      and(eq(devices.id, deviceId), eq(devices.userId, users.id), isNull(devices.revokedAt)),
+    )
+    .where(and(eq(users.id, userId), eq(users.status, "active"), isNull(users.deletedAt)))
+    .limit(1);
+
+  return rows.length > 0;
+}
+
 /**
  * Resolve a session by access token hash. Used for auth-protected endpoints
- * (hosts, sync, me). Only matches unrevoked, unexpired sessions.
+ * (hosts, sync, me). Only matches an active account/device and an unrevoked,
+ * unexpired session.
  */
 export function requireAuth(db: Db) {
   return async function preHandler(req: FastifyRequest, rep: FastifyReply) {
@@ -81,6 +101,9 @@ export function requireAuth(db: Db) {
     const session = rows[0];
     if (new Date(session.expiresAt).getTime() < Date.now()) {
       return unauthorized(rep, "会话已过期");
+    }
+    if (!(await isSessionPrincipalActive(db, session.userId, session.deviceId))) {
+      return unauthorized(rep, "账户或设备不可用");
     }
 
     req.auth = {

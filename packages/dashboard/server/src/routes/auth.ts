@@ -8,6 +8,7 @@ import {
   cookieOptions,
   accessTokenFrom,
   refreshTokenFrom,
+  isSessionPrincipalActive,
   requireAuth,
   revokeFamily,
   SESSION_COOKIE,
@@ -289,6 +290,11 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, config: ServerC
     if (matched.revokedAt !== null) {
       await revokeFamily(db, matched.familyId, now);
       return unauthorized(rep, "refresh token 已失效");
+    }
+
+    if (!(await isSessionPrincipalActive(db, matched.userId, matched.deviceId))) {
+      await revokeFamily(db, matched.familyId, now);
+      return unauthorized(rep, "账户或设备不可用");
     }
 
     // Check refresh token expiry
