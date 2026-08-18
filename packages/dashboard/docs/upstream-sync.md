@@ -8,18 +8,19 @@
 
 ## 当前基线
 
-- 状态：首次 Expo 模块同步完成，等待本次改动提交
-- Paseo App commit：`da0ffeddf5d69edf51f98cdaa018bbdd3dbe1a1d`
-- Paseo App version：`0.3.1`
-- commit 日期：2026-08-16
+- 状态：已完成本次 Expo 模块同步
+- Paseo App commit：`f9633dd359ce2fdcd108fb5b169aa7417363c60b`
+- Paseo App version：`0.4.0`
+- commit 日期：2026-08-18
 - 同步日期：2026-08-18
-- 同步方式：复制该 commit 的 Expo Router、React Native Web、Metro、Unistyles 和工作面源码到 `packages/dashboard/web`，再应用 Dashboard 登录与账号 Host 边界。
+- 同步方式：以 `da0ffeddf` 为共同基线，对 App 的共享 UI 做三方合并；新增和删除的共享模块按该 commit 同步，再保留 Dashboard 登录、账号 Host 和无本地直连的固定差异。
 
 ## 最近五次同步
 
-| Paseo App commit                           | App version | 日期       | 模块                                                                            | 状态   | 验证 |
-| ------------------------------------------ | ----------- | ---------- | ------------------------------------------------------------------------------- | ------ | ---- |
-| `da0ffeddf5d69edf51f98cdaa018bbdd3dbe1a1d` | `0.3.1`     | 2026-08-18 | Expo 外壳、Host/Pairing、Workspace、Agent/Timeline、Terminal/Composer、Settings | 已同步 | 通过 |
+| Paseo App commit                           | App version | 日期       | 模块                                                                                | 状态   | 验证 |
+| ------------------------------------------ | ----------- | ---------- | ----------------------------------------------------------------------------------- | ------ | ---- |
+| `f9633dd359ce2fdcd108fb5b169aa7417363c60b` | `0.4.0`     | 2026-08-18 | Expo 外壳、Workspace、Agent/Timeline、Terminal/Composer、Changes、Settings、Plugins | 已同步 | 通过 |
+| `da0ffeddf5d69edf51f98cdaa018bbdd3dbe1a1d` | `0.3.1`     | 2026-08-18 | Expo 外壳、Host/Pairing、Workspace、Agent/Timeline、Terminal/Composer、Settings     | 已同步 | 通过 |
 
 这里只保留最近五次记录。更早记录由 Git 历史保存。
 
@@ -27,13 +28,13 @@
 
 | Dashboard 模块       | Paseo App 上游范围                              | Dashboard 固定差异                                    | 状态   | 最近同步 |
 | -------------------- | ----------------------------------------------- | ----------------------------------------------------- | ------ | -------- |
-| Expo 外壳与设计系统  | Expo Router、React Native Web、Metro、Unistyles | Dashboard 自有 app config、Metro API proxy 和登录门槛 | 已同步 | `da0ffe` |
-| 认证外壳             | Dashboard 自有                                  | 登录完成前不启动 Host 或 daemon 连接                  | 已同步 | `da0ffe` |
-| Host 与 Pairing      | Host 列表、pairing link 交互                    | 删除 direct/localhost/匿名 pairing；成功后写入账号    | 已同步 | `da0ffe` |
-| Workspace            | Workspace 页面、文件浏览和通用工作区组件        | Host 只来自当前账号                                   | 已同步 | `da0ffe` |
-| Agent 与 Timeline    | Agent 树、状态、Timeline 和权限交互             | Dashboard Server 不进入 daemon 数据路径               | 已同步 | `da0ffe` |
-| Terminal 与 Composer | Terminal、输入框、新会话和权限处理              | 浏览器经 Paseo client 直接连接 daemon                 | 已同步 | `da0ffe` |
-| Settings 与主题      | 设置页面、设计 token 和基础组件                 | 独立账号入口管理 pairing、Host 刷新/删除和登出        | 已同步 | `da0ffe` |
+| Expo 外壳与设计系统  | Expo Router、React Native Web、Metro、Unistyles | Dashboard 自有 app config、Metro API proxy 和登录门槛 | 已同步 | `f9633d` |
+| 认证外壳             | Dashboard 自有                                  | 登录完成前不启动 Host 或 daemon 连接                  | 已同步 | `f9633d` |
+| Host 与 Pairing      | Host 列表、pairing link 交互                    | 删除 direct/localhost/匿名 pairing；成功后写入账号    | 已同步 | `f9633d` |
+| Workspace            | Workspace 页面、文件浏览和通用工作区组件        | Host 只来自当前账号                                   | 已同步 | `f9633d` |
+| Agent 与 Timeline    | Agent 树、状态、Timeline 和权限交互             | Dashboard Server 不进入 daemon 数据路径               | 已同步 | `f9633d` |
+| Terminal 与 Composer | Terminal、输入框、新会话和权限处理              | 浏览器经 Paseo client 直接连接 daemon                 | 已同步 | `f9633d` |
+| Settings 与主题      | 设置页面、设计 token 和基础组件                 | 独立账号入口管理 pairing、Host 刷新/删除和登出        | 已同步 | `f9633d` |
 
 ## Dashboard 固定差异
 
@@ -67,4 +68,4 @@
 - Metro `8082` 的 `/api/*` 只代理到内部 Dashboard API；
 - `npm run build:dashboard`、Dashboard typecheck、目标测试、lint 和格式检查通过。
 
-本次结果：Expo Web 构建、Dashboard typecheck、根 lint 和格式检查通过；21 个 Dashboard Web 定向测试、73 个路由与多语言定向测试和 3 个浏览器认证/账号边界测试通过。契约测试已完成定向验证。
+本次结果：Expo Web 构建、根 typecheck、lint 和格式检查通过；21 个 Dashboard Web 账号边界测试、148 个上游 UI 定向测试、3 个源码边界测试、3 个浏览器认证/账号测试和 19 个 Server 配置/安全契约测试通过。

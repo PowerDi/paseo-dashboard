@@ -40,10 +40,12 @@ function relayHost(serverId: string): HostProfile {
 function dashboardStorage(): HostRuntimeStorage & {
   getItem: ReturnType<typeof vi.fn>;
   setItem: ReturnType<typeof vi.fn>;
+  removeItem: ReturnType<typeof vi.fn>;
 } {
   return {
     getItem: vi.fn(async () => null),
     setItem: vi.fn(async () => undefined),
+    removeItem: vi.fn(async () => undefined),
   };
 }
 
@@ -108,6 +110,7 @@ describe("HostRuntimeStore Dashboard boundary", () => {
 
       expect(storage.getItem).not.toHaveBeenCalled();
       expect(storage.setItem).not.toHaveBeenCalled();
+      expect(storage.removeItem).not.toHaveBeenCalled();
       expect(readInitialConnectionHint).not.toHaveBeenCalled();
       expect(deps.connectToDaemon).not.toHaveBeenCalled();
       expect(store.getHosts()).toEqual([]);
