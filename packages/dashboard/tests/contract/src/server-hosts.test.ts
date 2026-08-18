@@ -332,6 +332,43 @@ describe("Host API contract", () => {
     expect(res2.json().host.label).toBe("Unique Host");
   });
 
+  it("POST /api/v1/hosts/import — allows a deleted host to be paired again", async () => {
+    const connection = {
+      ...testOffer,
+      serverId: "srv_reimport_01JABCDEFGHIJKLMNOP",
+      daemonPublicKeyB64: "cmVpbXBvcnQtdGVzdC1wdWJsaWMta2V5",
+    };
+    const payload = {
+      label: "Reimport Test",
+      connection,
+      clientVerification: { verifiedAt: "2026-08-11T12:30:00Z", serverVersion: "0.3.0" },
+      idempotencyKey: "idem-reimport-001",
+    };
+    const initial = await app.inject({
+      method: "POST",
+      url: "/api/v1/hosts/import",
+      cookies: { [authCookie.name]: authCookie.value },
+      payload,
+    });
+    expect(initial.statusCode).toBe(200);
+
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/hosts/${initial.json().host.id}`,
+      cookies: { [authCookie.name]: authCookie.value },
+    });
+    expect(deleted.statusCode).toBe(200);
+
+    const reimported = await app.inject({
+      method: "POST",
+      url: "/api/v1/hosts/import",
+      cookies: { [authCookie.name]: authCookie.value },
+      payload,
+    });
+    expect(reimported.statusCode).toBe(200);
+    expect(reimported.json().host.id).not.toBe(initial.json().host.id);
+  });
+
   it("POST /api/v1/hosts/import — rejects missing idempotencyKey", async () => {
     const res = await app.inject({
       method: "POST",

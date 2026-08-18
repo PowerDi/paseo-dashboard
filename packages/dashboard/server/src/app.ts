@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
+import { createRequire } from "node:module";
 import { createDb } from "./db/index.js";
 import { ensureTables } from "./db/migrate.js";
 import { registerAuthRoutes } from "./routes/auth.js";
@@ -14,10 +15,13 @@ import { registerInvitationRoutes } from "./routes/invitations.js";
 import { registerPasskeyRoutes } from "./routes/passkeys.js";
 import { registerEncryptionKeyRoutes } from "./routes/encryption-keys.js";
 import { ConfigEventBus } from "./lib/event-bus.js";
-import { setupSecurity } from "./lib/security.js";
+import { parseCorsOrigins, setupSecurity } from "./lib/security.js";
 import { EncryptionKeyManager } from "./lib/key-manager.js";
 import { createKeyProviderSet, type KeyProviderSet } from "./lib/key-provider.js";
 import type { ServerConfig } from "./config.js";
+
+const require = createRequire(import.meta.url);
+export const DASHBOARD_SERVER_VERSION = (require("../package.json") as { version: string }).version;
 
 export interface BuildAppOptions {
   keyProviders?: KeyProviderSet;
@@ -62,7 +66,7 @@ export function buildApp(config: ServerConfig, options: BuildAppOptions = {}) {
 
   // Plugins
   app.register(cors, {
-    origin: config.corsOrigin,
+    origin: parseCorsOrigins(config.corsOrigin),
     credentials: true,
     methods: ["GET", "POST", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
@@ -104,7 +108,7 @@ export function buildApp(config: ServerConfig, options: BuildAppOptions = {}) {
   const { rateLimits } = setupSecurity(app, config.corsOrigin, config.rateLimitEnabled);
 
   // Routes
-  app.get("/health", async () => ({ status: "ok", version: "0.1.0" }));
+  app.get("/health", async () => ({ status: "ok", version: DASHBOARD_SERVER_VERSION }));
   registerAuthRoutes(app, db, config);
   registerPasskeyRoutes(app, db, config);
   registerInvitationRoutes(app, db);

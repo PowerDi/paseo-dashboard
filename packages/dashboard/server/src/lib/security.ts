@@ -162,11 +162,26 @@ function bodyLimitExceeded(
   return false;
 }
 
-function originMatches(origin: string | undefined, allowedOrigin: string): boolean {
+export function parseCorsOrigins(value: string): boolean | string | string[] {
+  if (value === "*") return true;
+  const origins = value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (origins.length === 0) return false;
+  if (origins.length === 1) return origins[0];
+  return origins;
+}
+
+export function originMatches(origin: string | undefined, allowedOrigin: string): boolean {
   if (!origin) return true;
-  if (allowedOrigin === "*") return true;
+  const parsed = parseCorsOrigins(allowedOrigin);
+  if (parsed === true) return true;
+  if (parsed === false) return false;
+  const allowed = typeof parsed === "string" ? [parsed] : parsed;
   try {
-    return new URL(allowedOrigin).origin === new URL(origin).origin;
+    const requestOrigin = new URL(origin).origin;
+    return allowed.some((candidate) => new URL(candidate).origin === requestOrigin);
   } catch {
     return false;
   }

@@ -29,7 +29,9 @@ const PASSKEY_NAME_MAX_LENGTH = 80;
 function webauthnConfig(config: ServerConfig) {
   const origin =
     config.webauthnOrigin ??
-    (config.corsOrigin === "*" ? "http://localhost:5173" : config.corsOrigin);
+    (config.corsOrigin === "*"
+      ? "http://localhost:8082"
+      : (config.corsOrigin.split(",")[0]?.trim() ?? "http://localhost:8082"));
   let rpId = config.webauthnRpId;
   if (!rpId) {
     try {
@@ -112,7 +114,12 @@ function parseDeviceInfo(value: unknown): DeviceInfo | null {
   const device = responseObject(value);
   if (typeof device?.installationId !== "string" || !device.installationId) return null;
   const platform =
-    device.platform === "web" || device.platform === "harmony" ? device.platform : "unknown";
+    device.platform === "ios" ||
+    device.platform === "android" ||
+    device.platform === "web" ||
+    device.platform === "electron"
+      ? device.platform
+      : "unknown";
   return {
     installationId: device.installationId,
     name: typeof device.name === "string" ? device.name : "",

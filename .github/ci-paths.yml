@@ -49,6 +49,9 @@ app:
   - "packages/app/**"
   - "packages/expo-two-way-audio/**"
 
+dashboard:
+  - "packages/dashboard/**"
+
 sdk:
   - "packages/client/**"
   - "packages/highlight/**"

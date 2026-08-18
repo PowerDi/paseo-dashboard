@@ -1,5 +1,0 @@
-{
-  "rules": {
-    "eslint-plugin-react-perf/jsx-no-new-function-as-prop": "off"
-  }
-}

@@ -20,6 +20,7 @@ const gatedCiJobs = new Map([
   ["desktop-tests-ubuntu", { name: "desktop-tests (ubuntu-latest)", contract: "desktop" }],
   ["desktop-tests-windows", { name: "desktop-tests (windows-latest)", contract: "desktop" }],
   ["app-tests", { name: "app-tests", contract: "app" }],
+  ["dashboard-tests", { name: "dashboard-tests", contract: "dashboard" }],
   ["sdk-tests", { name: "sdk-tests", contract: "sdk" }],
   ["playwright-1", { name: "playwright (shard 1/4)", contract: "browser" }],
   ["playwright-2", { name: "playwright (shard 2/4)", contract: "browser" }],
@@ -169,6 +170,7 @@ test("PR routing declares stable behavior ownership", () => {
       "packages/app/package.json",
     ],
     app: ["packages/app/**", "packages/expo-two-way-audio/**"],
+    dashboard: ["packages/dashboard/**"],
     sdk: ["packages/client/**", "packages/highlight/**", "packages/protocol/**"],
     browser: [
       "packages/app/src/!(desktop)/**",

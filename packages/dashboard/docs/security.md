@@ -109,9 +109,16 @@ MVP 选择 **服务端可解密的 envelope encryption**，原因是账号恢复
 - access session 短时有效；refresh token 高熵、单次轮换、服务端只存哈希。
 - 检测 refresh token reuse 后撤销整个 token family。
 - Web 优先使用 `Secure`、`HttpOnly`、`SameSite=Lax/Strict` Cookie；状态改变请求使用 CSRF token 或严格 same-origin + Origin 校验。
-- Harmony 使用 bearer access token，refresh token 存平台安全存储；不得依赖浏览器 Cookie。
+- Paseo 原生和桌面客户端使用 bearer access token，refresh token 存平台安全存储；不得依赖浏览器 Cookie。
 - 修改密码默认撤销其他 session；设备撤销撤销该设备所有 session。
 - 每次注册、登录和 refresh 都更新 device/session 的截断 IP、浏览器/操作系统摘要与认证方式。不得保存完整 User-Agent。
+
+#### 客户端登录凭证
+
+- refresh token 必须存入 iOS Keychain、Android Keystore 或桌面系统提供的等价安全存储。
+- access token 优先只放在内存中；需要跨启动保存时使用同一安全存储。
+- AsyncStorage、localStorage 和普通文件不能保存 access/refresh token。
+- 设备 ID、Host mapping 和不具备登录能力的界面状态可以使用普通 App 存储。
 
 ### Passkey
 
@@ -129,9 +136,8 @@ MVP 选择 **服务端可解密的 envelope encryption**，原因是账号恢复
 - 当前 limiter 是单进程内存状态。多实例部署必须改用共享限流存储，否则每个实例各自计数。
 - 不提供邮件找回或公开重置密码 endpoint。未来的本地管理员 recovery code/CLI 必须独立定义授权、审计和撤销边界；若增加网络入口，再补对应限流。
 - 登录错误不暴露账号是否存在；指数退避和临时锁定必须避免永久 DoS。
-- CORS 默认只允许配置的 Dashboard origin；不使用 `*` 与凭据。
-- CSP 至少限制 `default-src 'self'`、明确 `connect-src` 为 Dashboard API 与用户配置 Relay 所需策略；禁止不受控第三方脚本。
-- 敏感页面设置 `Referrer-Policy: no-referrer`、`Cache-Control: no-store`。
+- CORS 默认只允许 Dashboard Web 开发 origin；生产显式配置实际 Dashboard Web origin。使用 Cookie 时不允许 `*`。
+- Dashboard API 响应使用严格安全头和 `Cache-Control: no-store`。Dashboard Web 的 CSP、`connect-src` 和 Referrer Policy 由 Web 部署负责。
 - 生产日志采用字段 allowlist；错误对象在进入 logger 前做 redaction。`inviteToken`、邀请创建响应 token、access/refresh token 与 WebAuthn response 使用相同的脱敏规则。
 - 数据库备份加密、限制访问、验证恢复，并包含密钥版本恢复演练。
 

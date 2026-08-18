@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
-import { buildApp } from "@getpaseo/dashboard-server/app";
+import { buildApp, DASHBOARD_SERVER_VERSION } from "@getpaseo/dashboard-server/app";
 import type { ServerConfig } from "@getpaseo/dashboard-server/config";
 
 function makeTestConfig(): { config: ServerConfig; cleanup: () => void } {
@@ -15,7 +15,7 @@ function makeTestConfig(): { config: ServerConfig; cleanup: () => void } {
     port: 0,
     dataDir: dir,
     logLevel: "silent",
-    corsOrigin: "http://localhost:5173",
+    corsOrigin: "http://localhost:8081,http://localhost:8082",
     kekFile: kekPath,
     accessTokenTtl: 900,
     refreshTokenTtl: 7 * 24 * 3600,
@@ -266,6 +266,19 @@ describe("Security hardening (P2.4)", () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it("accepts each configured CORS origin", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/hosts/nonexistent",
+      headers: { origin: "http://localhost:8082" },
+      cookies: { [cookieA.name]: cookieA.value },
+      payload: { label: "Missing", baseVersion: 1 },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:8082");
+  });
+
   // ── CSP and security headers ───────────────────────
 
   it("responses include Content-Security-Policy header", async () => {
@@ -275,6 +288,7 @@ describe("Security hardening (P2.4)", () => {
     });
     expect(res.headers["content-security-policy"]).toBeDefined();
     expect(res.headers["content-security-policy"]).toContain("default-src 'self'");
+    expect(res.json()).toEqual({ status: "ok", version: DASHBOARD_SERVER_VERSION });
   });
 
   it("responses include X-Content-Type-Options header", async () => {

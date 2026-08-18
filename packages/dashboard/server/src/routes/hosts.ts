@@ -71,19 +71,22 @@ export function registerHostRoutes(
     const fp = keyManager.fingerprint(connectionJson);
     const now = new Date().toISOString();
 
-    // Idempotency check: if this user already imported with the same key,
-    // return the existing host.
+    // Idempotency applies to the current import only. A tombstoned host must not
+    // prevent the user from pairing the same daemon again after removing it.
     const idemRows = await db
       .select()
       .from(hosts)
-      .where(and(eq(hosts.ownerUserId, userId), eq(hosts.idempotencyKey, idempotencyKey)))
+      .where(
+        and(
+          eq(hosts.ownerUserId, userId),
+          eq(hosts.idempotencyKey, idempotencyKey),
+          isNull(hosts.deletedAt),
+        ),
+      )
       .limit(1);
 
     if (idemRows.length > 0) {
       const existing = idemRows[0];
-      if (existing.deletedAt) {
-        return conflict(rep, ErrorCodes.IDEMPOTENCY_CONFLICT, "幂等键对应的 Host 已被删除");
-      }
       // Return existing host (idempotent)
       const connRows = await db
         .select()

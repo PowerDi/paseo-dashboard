@@ -118,9 +118,9 @@
     "release:patch": "npm run release:check && npm run version:all:patch && npm run release:publish && npm run release:push",
     "release:minor": "npm run release:check && npm run version:all:minor && npm run release:publish && npm run release:push",
     "release:major": "npm run release:check && npm run version:all:major && npm run release:publish && npm run release:push",
-    "dev:dashboard:server": "npm run dev --workspace=@getpaseo/dashboard-server",
-    "dev:dashboard:web": "npm run dev --workspace=@getpaseo/dashboard-web",
-    "build:dashboard": "npm run build --workspace=@getpaseo/dashboard-shared && npm run build --workspace=@getpaseo/dashboard-server && npm run build --workspace=@getpaseo/dashboard-web",
+    "dev:dashboard:server": "npm run build --workspace=@getpaseo/dashboard-shared && PASEO_BOARD_PORT=3002 PASEO_BOARD_CORS_ORIGIN=http://localhost:8082 PASEO_BOARD_WEBAUTHN_ORIGIN=http://localhost:8082 npm run dev --workspace=@getpaseo/dashboard-server",
+    "dev:dashboard:web": "PASEO_DASHBOARD_API_URL=http://127.0.0.1:3002 npm run dev --workspace=@getpaseo/dashboard-web",
+    "build:dashboard": "npm run build:app-deps && npm run build --workspace=@getpaseo/dashboard-shared && npm run build --workspace=@getpaseo/dashboard-server && npm run build --workspace=@getpaseo/dashboard-web",
     "test:dashboard": "npm run test --workspace=@getpaseo/dashboard-web && npm run test --workspace=@getpaseo/dashboard-tests-contract && npm run test --workspace=@getpaseo/dashboard-tests-e2e",
     "typecheck:dashboard": "npm run typecheck --workspace=@getpaseo/dashboard-shared && npm run typecheck --workspace=@getpaseo/dashboard-server && npm run typecheck --workspace=@getpaseo/dashboard-web && npm run typecheck --workspace=@getpaseo/dashboard-tests-contract && npm run typecheck --workspace=@getpaseo/dashboard-tests-e2e"
   },

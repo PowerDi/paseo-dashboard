@@ -418,7 +418,7 @@ The desktop-managed daemon disables the bundled web UI by default (`PASEO_WEB_UI
 
 ## Built workspace packages
 
-Package imports resolve through package exports to compiled `dist/` output, not sibling `src/` files. This is true in local dev and in published packages: the app, daemon, CLI, and SDK consumers should all exercise the same runtime paths.
+Package imports resolve through package exports to compiled `dist/` output, not sibling `src/` files. The app, daemon, CLI, Dashboard, and SDK consumers should exercise the same runtime paths.
 
 `npm run dev:server` builds the server-side workspace packages once, then keeps `@getpaseo/protocol` and `@getpaseo/client` fresh with TypeScript watch builds while the daemon runs. If you change protocol schemas or client code outside that watch workflow, rebuild the producer before trusting runtime behavior.
 
@@ -429,9 +429,12 @@ npm run build:client       # protocol -> client
 npm run build:server-deps  # highlight -> relay -> protocol -> client
 npm run build:server       # server-deps -> server -> cli
 npm run build:app-deps     # highlight -> protocol -> client -> expo-two-way-audio
+npm run build:dashboard    # app deps -> dashboard shared -> server -> Expo web
 ```
 
 Use `npm run build:server` whenever you have changed any daemon/server-facing package and need clean cross-package types or runtime behavior.
+
+Dashboard local development uses its own Expo/Metro entry: `npm run dev:dashboard:server` starts the API on `127.0.0.1:3002`, and `npm run dev:dashboard:web` starts Metro on `8082` with an internal `/api/*` proxy. See `packages/dashboard/docs/local-development.md`; do not point Dashboard at the Paseo App Metro service.
 
 The app Metro config disables Watchman and uses Metro's node crawler for exports. Keep that invariant unless you have verified production app exports on machines with and without Watchman installed; distro Watchman builds can differ in capabilities and change Metro's crawl behavior.
 
@@ -440,6 +443,7 @@ For tighter loops, you can rebuild a single workspace:
 - Changed `packages/protocol/src/*` or `packages/client/src/*`: `npm run build:client`.
 - Changed `packages/server/src/*`, `packages/cli/src/*`, `packages/relay/src/*`, or `packages/highlight/src/*`: `npm run build:server`.
 - Changed app build dependencies: `npm run build:app-deps`.
+- Changed Dashboard account, contracts, or server code: `npm run build:dashboard`.
 
 ## ACP provider catalog versions
 

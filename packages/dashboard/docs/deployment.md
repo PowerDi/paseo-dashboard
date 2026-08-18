@@ -12,35 +12,34 @@
 # 安装依赖
 npm install --cache /tmp/.npm-cache
 
-# 编译所有包
-npm run build
+# 编译 Dashboard shared、server 和独立 Web
+npm run build:dashboard
 
-# 启动后端
-node server/dist/index.js
+# 启动 Dashboard API
+node packages/dashboard/server/dist/index.js
 
-# 前端静态文件托管
-# web/dist/ 下的文件用 nginx 或其他静态服务器托管
+# Web 静态文件位于 packages/dashboard/web/dist
 ```
 
 ## 2. 环境变量
 
-| 变量                             | 必填 | 默认值                      | 说明                                                  |
-| -------------------------------- | ---- | --------------------------- | ----------------------------------------------------- |
-| `PASEO_BOARD_HOST`               | 否   | `127.0.0.1`                 | 监听地址，生产应设为 `0.0.0.0` 或反代后端地址         |
-| `PASEO_BOARD_PORT`               | 否   | `3000`                      | 监听端口                                              |
-| `PASEO_BOARD_DATA_DIR`           | 是   | `./data`                    | 数据目录（SQLite + key registry），应挂载到持久卷     |
-| `PASEO_BOARD_KEY_PROVIDER`       | 否   | `file`                      | `file` 或 `aws-kms`                                   |
-| `PASEO_BOARD_KEK_FILE`           | 条件 | 空（仅开发自动生成）        | file provider 的 32 字节 KEK 路径，权限必须 `0600`    |
-| `PASEO_BOARD_AWS_KMS_KEY_ID`     | 条件 | 空                          | aws-kms provider 使用的 KMS key id 或 alias           |
-| `PASEO_BOARD_AWS_KMS_REGION`     | 否   | SDK 默认 region             | AWS KMS region                                        |
-| `PASEO_BOARD_CORS_ORIGIN`        | 否   | `http://localhost:5173`     | 前端域名                                              |
-| `PASEO_BOARD_REGISTRATION_OPEN`  | 否   | `true`                      | 是否允许首用户之后的公开注册                          |
-| `PASEO_BOARD_LOG_LEVEL`          | 否   | `info`                      | 日志级别                                              |
-| `PASEO_BOARD_RATE_LIMIT_ENABLED` | 否   | `true`                      | 是否启用内存限流；生产不要关闭                        |
-| `PASEO_BOARD_TRUSTED_PROXIES`    | 否   | 空                          | 反代 IP，逗号分隔，如 `10.0.0.1,10.0.0.2`             |
-| `PASEO_BOARD_WEBAUTHN_ORIGIN`    | 否   | 与 CORS origin 相同         | WebAuthn 页面 origin，例如 `https://dash.example.com` |
-| `PASEO_BOARD_WEBAUTHN_RP_ID`     | 否   | WebAuthn origin 的 hostname | WebAuthn RP ID，例如 `dash.example.com`               |
-| `PASEO_BOARD_WEBAUTHN_RP_NAME`   | 否   | `Paseo Dashboard`           | 浏览器 Passkey 提示中显示的服务名                     |
+| 变量                             | 必填 | 默认值                      | 说明                                                 |
+| -------------------------------- | ---- | --------------------------- | ---------------------------------------------------- |
+| `PASEO_BOARD_HOST`               | 否   | `127.0.0.1`                 | 监听地址，生产应设为 `0.0.0.0` 或反代后端地址        |
+| `PASEO_BOARD_PORT`               | 否   | `3002`                      | 监听端口                                             |
+| `PASEO_BOARD_DATA_DIR`           | 是   | `./data`                    | 数据目录（SQLite + key registry），应挂载到持久卷    |
+| `PASEO_BOARD_KEY_PROVIDER`       | 否   | `file`                      | `file` 或 `aws-kms`                                  |
+| `PASEO_BOARD_KEK_FILE`           | 条件 | 空（仅开发自动生成）        | file provider 的 32 字节 KEK 路径，权限必须 `0600`   |
+| `PASEO_BOARD_AWS_KMS_KEY_ID`     | 条件 | 空                          | aws-kms provider 使用的 KMS key id 或 alias          |
+| `PASEO_BOARD_AWS_KMS_REGION`     | 否   | SDK 默认 region             | AWS KMS region                                       |
+| `PASEO_BOARD_CORS_ORIGIN`        | 否   | `http://localhost:8082`     | Dashboard Web origin；多个值用逗号分隔               |
+| `PASEO_BOARD_REGISTRATION_OPEN`  | 否   | `true`                      | 是否允许首用户之后的公开注册                         |
+| `PASEO_BOARD_LOG_LEVEL`          | 否   | `info`                      | 日志级别                                             |
+| `PASEO_BOARD_RATE_LIMIT_ENABLED` | 否   | `true`                      | 是否启用内存限流；生产不要关闭                       |
+| `PASEO_BOARD_TRUSTED_PROXIES`    | 否   | 空                          | 反代 IP，逗号分隔，如 `10.0.0.1,10.0.0.2`            |
+| `PASEO_BOARD_WEBAUTHN_ORIGIN`    | 否   | 与 CORS origin 相同         | WebAuthn 页面 origin，例如 `https://app.example.com` |
+| `PASEO_BOARD_WEBAUTHN_RP_ID`     | 否   | WebAuthn origin 的 hostname | WebAuthn RP ID，例如 `app.example.com`               |
+| `PASEO_BOARD_WEBAUTHN_RP_NAME`   | 否   | `Paseo Dashboard`           | 浏览器 Passkey 提示中显示的服务名                    |
 
 ## 3. KEK 管理
 
@@ -128,18 +127,11 @@ server {
     ssl_certificate /path/to/cert.pem;
     ssl_certificate_key /path/to/key.pem;
 
-    # 前端静态文件
-    root /var/www/paseo-board/web/dist;
-    index index.html;
+    root /srv/paseo-dashboard/web;
+    try_files $uri $uri/ /index.html;
 
-    # SPA fallback
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # API 反代到后端
     location /api/ {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:3002;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -148,10 +140,16 @@ server {
         # 禁止 body dump
         proxy_request_buffering on;
         proxy_buffer_size 4k;
+        add_header Cache-Control "no-store" always;
     }
 
-    # 安全头
-    add_header Cache-Control "no-store" always;
+    location = /health {
+        proxy_pass http://127.0.0.1:3002;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Cache-Control "no-store" always;
+    }
+
     add_header Referrer-Policy "no-referrer" always;
 }
 ```
@@ -162,7 +160,7 @@ server {
 - 当前限流状态不跨进程共享。多实例部署前接入共享限流存储，不能把流量轮询当作扩容限流额度。
 - **禁止 body dump / APM body capture**：pairing offer 包含 daemon capability，不得记录请求体
 - 设置 `PASEO_BOARD_TRUSTED_PROXIES` 为反代 IP，确保 `req.ip` 正确
-- CSP 建议至少 `default-src 'self'`，`connect-src` 允许 Dashboard API 域名 + 用户配置的 Relay 域名
+- Dashboard Server 不托管静态文件。反向代理发布 `packages/dashboard/web/dist`，并为 Dashboard Web 设置 CSP 和 Relay `connect-src`。
 
 ## 5. 注册流程
 

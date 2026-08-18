@@ -1,62 +1,39 @@
 # Paseo Dashboard
 
-Paseo Dashboard 是 Paseo monorepo 内的 Host 配置跨设备同步控制面。它管理用户身份和 Host capability（pairing offer 加密存储 + 多设备同步），浏览器/Harmony 客户端从 Dashboard 获取配置后直接通过 Paseo Relay/E2EE 连接 daemon。Dashboard 不代理 daemon 数据。
+Dashboard 是 Paseo 的账号与多 Host 持久化控制面。它保存用户、设备、session 和加密的 Relay Host 配置。独立 Dashboard Web 登录后从账号加载 Host，再由浏览器经 Relay/E2EE 直连 daemon。
 
-## 在 monorepo 中的位置
+Dashboard Server 不代理 Agent、Timeline、Terminal、文件或其他 daemon 数据。
 
-```
+## 目录
+
+```text
 packages/dashboard/
-├── shared/           # API 契约类型（@getpaseo/dashboard-shared）
-├── server/            # Dashboard API（@getpaseo/dashboard-server）
-├── web/               # 浏览器应用（@getpaseo/dashboard-web）
-├── tests/
-│   ├── contract/      # API 契约测试
-│   └── e2e/           # 端到端测试
-└── docs/              # 设计文档
+├── shared/          # Dashboard API 契约
+├── server/          # 账号、设备、Host 持久化与同步 API
+├── web/             # 独立 Expo/Metro Dashboard Web
+├── tests/contract/  # API 契约和安全边界测试
+├── tests/e2e/       # 浏览器边界与跨包兼容测试
+└── docs/            # Dashboard 文档和 UI 上游同步记录
 ```
 
-Dashboard 依赖 `@getpaseo/client` 和 `@getpaseo/protocol`（monorepo 内直接引用），不依赖 `@getpaseo/app`。
+Dashboard Web 使用自己的 Expo Router、React Native Web、Metro 和 Unistyles 源码。它不依赖 `packages/app`。UI 按 [`docs/upstream-sync.md`](docs/upstream-sync.md) 从明确的 Paseo App commit 同步，移植后的源码保存在 `web/` 内。
 
-## 开发
+## 本地开发
 
 ```bash
-# 从 monorepo 根目录
-
-# 构建 dashboard 依赖（client/protocol/relay）
-npm run build:client && npm run build:relay
-
-# 构建 dashboard
-npm run build:dashboard
-
-# 启动后端（端口 3000）
+# Dashboard API，127.0.0.1:3002
 npm run dev:dashboard:server
 
-# 启动前端 dev server（端口 5173）
+# Dashboard Expo/Metro，8082；内部代理 /api 到 3002
 npm run dev:dashboard:web
-
-# 测试
-npm run test:dashboard
-
-# 类型检查
-npm run typecheck:dashboard
 ```
 
-## 环境变量
+浏览器只需要访问或映射 `http://localhost:8082`。不要把 API `3002` 单独暴露给浏览器入口。
 
-| 变量                            | 默认值                  | 说明                             |
-| ------------------------------- | ----------------------- | -------------------------------- |
-| `PASEO_BOARD_HOST`              | `127.0.0.1`             | 监听地址                         |
-| `PASEO_BOARD_PORT`              | `3000`                  | 监听端口                         |
-| `PASEO_BOARD_DATA_DIR`          | `./data`                | 数据目录（SQLite + KEK）         |
-| `PASEO_BOARD_KEK_FILE`          | 空（开发自动生成）      | 生产必须指定外部 32 字节密钥文件 |
-| `PASEO_BOARD_CORS_ORIGIN`       | `http://localhost:5173` | CORS 允许来源                    |
-| `PASEO_BOARD_REGISTRATION_OPEN` | `true`                  | 是否允许首用户之后的公开注册     |
-| `PASEO_BOARD_WEBAUTHN_ORIGIN`   | 与 CORS origin 相同     | WebAuthn 页面 origin             |
-| `PASEO_BOARD_WEBAUTHN_RP_ID`    | origin hostname         | WebAuthn RP ID                   |
-| `PASEO_BOARD_WEBAUTHN_RP_NAME`  | `Paseo Dashboard`       | Passkey 提示中的服务名           |
+## 验证
 
-## 当前状态
-
-M3 与 P4.1 已完成。P4.2 已加入 Passkey/WebAuthn 和 session/device 登录环境审计；风险登录提示按 2026-08-16 的决定暂缓。下一阶段是 P4.3 生产密钥管理。
-
-详见 `docs/progress.md`。
+```bash
+npm run build:dashboard
+npm run typecheck:dashboard
+npm run test:browser --workspace=@getpaseo/dashboard-tests-e2e
+```

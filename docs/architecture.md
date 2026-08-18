@@ -38,6 +38,7 @@ Your code never leaves your machine. Paseo is local-first.
 - **CLI:** Terminal interface for agent workflows that can also start and manage the daemon.
 - **Desktop app:** Electron wrapper around the web app that bundles and auto-manages its own daemon.
 - **Relay:** Optional encrypted bridge for remote access without opening ports directly.
+- **Dashboard:** Optional account control plane that persists encrypted Relay Host configurations across Paseo clients.
 
 ## Packages
 
@@ -90,6 +91,17 @@ Owns the low-level daemon WebSocket driver plus the higher-level `PaseoClient`
 facade. App and CLI may import the low-level driver from
 `@getpaseo/client/internal/daemon-client` during migration, while new SDK-shaped
 code imports from `@getpaseo/client`.
+
+### `packages/dashboard` — Account and multi-Host control plane
+
+Owns account authentication, device/session management, encrypted Relay Host persistence, sync contracts, and an independently deployed Expo/Metro Dashboard Web UI.
+
+- `dashboard/shared` contains API contracts shared with the server.
+- `dashboard/server` persists users, sessions, devices, audit events, and encrypted Host capabilities. It never connects to daemons.
+- `dashboard/web` owns an independent Expo Router, React Native Web, Metro, and Unistyles login-first work surface. It connects from the browser to daemons through Relay/E2EE.
+- `dashboard/tests` owns API contracts, browser boundaries, and cross-package compatibility checks.
+
+Paseo App does not contain Dashboard account integration. Dashboard Web does not import `packages/app`; UI updates are copied from an exact committed Paseo App revision through the process in `packages/dashboard/docs/upstream-sync.md`. The resulting source remains inside Dashboard and builds independently. No package or runtime path may load Dashboard code from outside the repository root.
 
 ### `packages/app` — Mobile + web client (Expo)
 

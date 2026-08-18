@@ -23,7 +23,8 @@ export interface ServerConfig {
 }
 
 function defaultWebAuthnOrigin(corsOrigin: string): string {
-  return corsOrigin === "*" ? "http://localhost:5173" : corsOrigin;
+  if (corsOrigin === "*") return "http://localhost:8082";
+  return corsOrigin.split(",")[0]?.trim() || "http://localhost:8082";
 }
 
 function defaultWebAuthnRpId(origin: string): string {
@@ -39,12 +40,12 @@ export function loadConfig(): ServerConfig {
   if (keyProvider !== "file" && keyProvider !== "aws-kms") {
     throw new Error("PASEO_BOARD_KEY_PROVIDER 必须为 file 或 aws-kms");
   }
-  const corsOrigin = process.env.PASEO_BOARD_CORS_ORIGIN || "http://localhost:5173";
+  const corsOrigin = process.env.PASEO_BOARD_CORS_ORIGIN || "http://localhost:8082";
   const webauthnOrigin =
     process.env.PASEO_BOARD_WEBAUTHN_ORIGIN || defaultWebAuthnOrigin(corsOrigin);
   return {
     host: process.env.PASEO_BOARD_HOST || "127.0.0.1",
-    port: parseInt(process.env.PASEO_BOARD_PORT || "3000", 10),
+    port: parseInt(process.env.PASEO_BOARD_PORT || "3002", 10),
     dataDir: process.env.PASEO_BOARD_DATA_DIR || "./data",
     logLevel: process.env.PASEO_BOARD_LOG_LEVEL || "info",
     corsOrigin,

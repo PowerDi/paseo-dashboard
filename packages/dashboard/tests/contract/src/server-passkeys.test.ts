@@ -8,7 +8,7 @@ import type { ServerConfig } from "@getpaseo/dashboard-server/config";
 import type { LoginResponse, Passkey, Session } from "@getpaseo/dashboard-shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-const ORIGIN = "http://localhost:5173";
+const ORIGIN = "http://localhost:8081";
 const RP_ID = "localhost";
 const EMAIL = "passkey@example.com";
 const PASSWORD = "test-password-123";

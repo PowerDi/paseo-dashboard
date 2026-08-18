@@ -1,6 +1,6 @@
 // API 请求/响应、错误 code 和 Host sync 格式。
-// Web、Server、Harmony 共用同一份类型定义。
-// 本包不包含页面、数据库、Cookie、平台安全存储或 daemon 连接代码。
+// Dashboard Web 与 server 共用同一份类型定义。
+// 本包不包含 UI、数据库、平台安全存储或 daemon 连接代码。
 
 // ── 基础类型 ──────────────────────────────────────────
 
@@ -37,7 +37,7 @@ export const ErrorCodes = {
 export interface DeviceInfo {
   installationId: string;
   name: string;
-  platform: "web" | "harmony" | "unknown";
+  platform: "ios" | "android" | "web" | "electron" | "unknown";
 }
 
 export interface RegisterRequest {
@@ -78,8 +78,8 @@ export interface CreateInvitationResponse {
 export interface LoginResponse {
   user: User;
   deviceId: Ulid;
-  accessToken?: string; // Harmony 使用；Web 用 HttpOnly Cookie
-  refreshToken?: string; // Harmony 使用
+  accessToken?: string; // 原生和桌面客户端使用；浏览器也可使用 HttpOnly Cookie
+  refreshToken?: string; // 非 Cookie 客户端使用
   expiresIn: number; // accessToken 有效期（秒）
 }
 

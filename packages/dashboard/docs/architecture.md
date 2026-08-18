@@ -1,438 +1,64 @@
-# 架构
-
-## 状态标记
-
-- **源码事实**：已从 `/root/workspace/code/paseo` 验证。
-- **已定决策**：本项目必须遵守。
-- **设计建议**：MVP 推荐实现，可在记录理由后调整。
-- **开放问题**：见 `open-decisions.md`。
+# Dashboard 架构
 
 ## 系统边界
 
-**已定决策：** Dashboard 是 control/configuration plane。agent data plane 保持为客户端 ↔ Relay ↔ daemon。
+Dashboard 是账号与 Host 配置控制面。独立 Dashboard Web 使用 Dashboard Server 保存账号数据，使用 Paseo Relay/E2EE 直接连接 daemon。
 
 ```text
-┌──────────────────────┐       HTTPS        ┌────────────────────────┐
-│ Browser / Harmony    │ ─────────────────▶ │ Dashboard API          │
-│                      │ ◀───────────────── │ Auth + Host Sync       │
-│ Paseo client runtime │                    └────────────────────────┘
-│          │           │
-└──────────┼───────────┘
-           │ Existing Paseo E2EE WebSocket
-           ▼
-   ┌──────────────┐          outbound          ┌──────────────┐
-   │ Paseo Relay  │ ◀──────────────────────── │ Paseo daemon │
-   │ untrusted    │                           │ agents/data  │
-   └──────────────┘                           └──────────────┘
+Dashboard Web ── HTTPS ── Dashboard Server
+      │                         │
+      │                         └── User / Session / Device / encrypted Host
+      │
+      └── Paseo E2EE WebSocket ── Relay ── daemon
 ```
 
-Dashboard 后端不得创建到 Relay 或 daemon 的业务连接。首次连接验证由用户客户端执行。
-
-## 应用划分
-
-项目明确包含三个独立应用：
-
-1. **Web**：浏览器版本，负责页面、Dashboard 登录、Host 同步，以及直接连接 Relay/daemon。
-2. **Harmony**：HarmonyOS 版本，使用相同 Dashboard API，独立处理平台网络、安全存储和页面。
-3. **Server**：Dashboard 服务端，只负责用户、session、设备、Host 存储、同步和审计。
-
-Web 与 Harmony 都直接连接 Relay/daemon。Server 永远不连接 Relay/daemon。
-
-## 开发目录
-
-```text
-paseo-board/
-├── AGENTS.md
-├── web/                  # 浏览器应用
-├── harmony/              # HarmonyOS 应用
-├── server/               # Dashboard API 服务
-├── packages/
-│   └── contracts/        # 三个应用共用的 Dashboard API 格式
-├── tests/
-│   ├── contract/         # Web、Harmony、Server 的 API 一致性测试
-│   └── e2e/              # 登录、Host 同步和 Relay 连接流程测试
-└── docs/                 # 当前设计事实来源
-```
-
-当前只建立目录，不初始化具体框架。
-
-## 技术栈 (P0.1 决定)
-
-**已定决策：** 以下决策在 P0.1 阶段确定，记录于 `docs/open-decisions.md`。
-
-| 层                 | 选择                                  | 理由                                                                                                  |
-| ------------------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| 运行时             | Node.js v22                           | 环境唯一可用运行时                                                                                    |
-| 语言               | TypeScript                            | 与 web/contracts 共享类型，Paseo 官方包（`@getpaseo/client`/`protocol`）均为 TypeScript               |
-| 后端框架           | Fastify                               | 内置 pino 结构化日志 redaction；`@fastify/cookie`/`csrf-protection`/`rate-limit` 成熟插件覆盖安全需求 |
-| 数据库             | SQLite + Drizzle ORM                  | M1 单用户自托管零运维；Drizzle 同一 schema API 可迁移至 PostgreSQL                                    |
-| Web 框架           | React + Vite + React Router + Zustand | 独立实现，不引入 Paseo App 的 Expo Router / React Native store                                        |
-| 测试               | vitest                                | 与 Paseo 官方包一致                                                                                   |
-| 包管理             | npm workspaces                        | 与 Paseo 一致，原生支持 monorepo                                                                      |
-| Session（Web）     | opaque HttpOnly Cookie                | 前端不可读，防 XSS                                                                                    |
-| Session（Harmony） | bearer + rotating refresh token       | 平台安全存储                                                                                          |
-
-这些选择是 M1 阶段默认，后续可调整；更改时需更新本条记录和相关文档。
+Dashboard Server 不连接 Relay 或 daemon，不接收 timeline、terminal、prompt、文件内容、权限请求或 daemon RPC。
 
 ## 目录职责
 
-### `web`
+```text
+packages/dashboard/
+├── shared/src/           # Dashboard API 契约和共享实体
+├── server/src/           # 持久化、认证、加密、同步和审计
+├── web/src/              # 独立 Expo/Metro 登录优先 UI 与 daemon 工作面
+├── tests/contract/       # 服务端契约与安全边界
+├── tests/e2e/            # 浏览器边界与跨包兼容性
+└── docs/                 # 核心设计与 UI 上游同步记录
+```
 
-- 自己实现 Web 页面、路由、状态管理和设计系统。
-- 调用 Dashboard API 完成登录、Host 同步和设备管理。
-- 使用 `@getpaseo/client` 与 `@getpaseo/protocol` 直接连接 daemon。
-- 页面不直接创建多个 `DaemonClient`；应用内部统一管理 Host 连接。
-- 不导入 Paseo App 页面、store、Expo Router 或 React Native 代码。
-
-### `harmony`
-
-- 自己实现 Harmony 页面、导航、网络和安全存储。
-- 使用与 Web 相同的 Dashboard API 和 Host sync 格式。
-- 是否能直接使用 `@getpaseo/client` 必须通过 Harmony 真机或模拟器验证。
-- 如果运行环境不兼容，只实现平台适配，不修改 Paseo Relay 的加密格式。
-- 不为了与 Web 共享代码而引入不适合 Harmony 的浏览器依赖。
-
-### `server`
-
-- 提供注册、登录、session、设备、Host、同步、审计和账户管理 API。
-- 加密保存 pairing capability 和 HostConnection。
-- 不导入 `@getpaseo/client`，不建立 daemon WebSocket，不代理 agent 数据。
-- 不承担 Host 在线检测；在线状态由 Web/Harmony 直接连接后得出。
-
-### `packages/contracts`
-
-- 只保存 Dashboard API 的请求、响应、错误 code 和 Host sync 格式。
-- Web、Harmony、Server 必须使用同一份格式定义或由它生成的目标语言类型。
-- 不包含页面、数据库、Cookie、平台安全存储或 daemon 连接代码。
-- 除非出现第二个真实使用场景，不新增其他共享 package。
-
-### `tests/contract`
-
-- 验证 Web、Harmony 和 Server 对 Dashboard API 的理解一致。
-- 固定注册、登录、refresh、Host sync、冲突和错误响应样例。
-
-### `tests/e2e`
-
-- 验证浏览器 A 配置后浏览器 B 能同步并连接 daemon。
-- 后续加入 Harmony 与 Web 使用同一账号和 Host 配置的流程。
-- 验证 Dashboard Server 不接收 timeline、terminal、prompt 或 daemon RPC。
+Paseo 仓库包含 Dashboard 运行所需的完整源码。代码、manifest、symlink、运行时加载和文档命令都不得把仓库外目录作为依赖。
 
 ## 依赖方向
 
 ```text
-web      ──▶ packages/contracts
-harmony  ──▶ packages/contracts
-server   ──▶ packages/contracts
+dashboard/web ────────────▶ dashboard/shared
+dashboard/web ────────────▶ Dashboard API
+dashboard/web ────────────▶ Paseo client/protocol/relay
 
-web      ──▶ Paseo client/protocol
-harmony  ──▶ Paseo client/protocol 或 Harmony 平台适配
-server   ──X Paseo client/Relay/daemon
+dashboard/server ─────────▶ dashboard/shared
+dashboard/tests/contract ─▶ dashboard/server + dashboard/shared
 ```
 
-不要创建一个同时包含 Web、Harmony、Server 和 daemon 连接的通用大包。只有 Dashboard API 格式是当前确定需要共享的内容。
+`dashboard/shared` 先编译到 `dist`。Server 和 Web 使用相同契约，但不共享页面或状态实现。
 
-## 数据模型
+`dashboard/web` 拥有自己的 Expo Router、React Native Web、Metro、Unistyles、页面和状态。它不导入 `packages/app`。开发时可以按明确 commit 移植 Paseo App UI；同步完成后的源码必须留在 Dashboard 内。
 
-字段类型为逻辑模型，不指定 ORM。
+## Host 数据流
 
-### User
+1. 未登录页面只初始化认证状态。
+2. 登录成功后，Web 从 Dashboard Server 拉取当前账号 Host。
+3. Web 使用 Host 内的加密 Relay connection 直接连接 daemon。
+4. 添加 pairing 时，浏览器先验证 offer 和 daemon，再调用 Dashboard API 保存 Host。
+5. API 成功后，Host 才进入正式列表。
+6. 重命名和删除以服务端确认结果更新 UI；删除写入 tombstone，其他登录设备在同步后移除 Host。
 
-| 字段                            | 说明                                      |
-| ------------------------------- | ----------------------------------------- |
-| `id`                            | UUID/ULID 主键                            |
-| `emailNormalized`               | 唯一、明文可查询；显示邮箱可另存          |
-| `passwordHash`                  | Argon2id 输出，敏感但不可逆               |
-| `role`                          | `admin` 或 `member`；首个有效用户为 admin |
-| `status`                        | `active`、`locked` 或 `pending_delete`    |
-| `syncRevision`                  | 账号 Host 同步单调整数                    |
-| `createdAt/updatedAt/deletedAt` | 生命周期                                  |
+Dashboard Web 不从本机 Host 注册表导入正式 Host，不自动连接 localhost，也不支持任意地址直连。
 
-第一阶段 Host 归属用户。未来共享不改变 Host 身份，而通过 `HostGrant` 扩展。
+## UI 同步边界
 
-### Device
+Paseo App 是 Dashboard Web 的 UI 上游，不是运行时依赖。每次同步只移植 [`upstream-sync.md`](upstream-sync.md) 指定模块，并保留以下差异：
 
-| 字段                                | 说明                                                  |
-| ----------------------------------- | ----------------------------------------------------- |
-| `id`                                | 主键                                                  |
-| `userId`                            | 所有者 FK                                             |
-| `installationIdHash`                | 客户端随机 installation id 的 HMAC；不使用硬件唯一 ID |
-| `displayName/platform`              | 明文元数据                                            |
-| `lastIpPrefix/lastUserAgentSummary` | 最近一次认证环境；IP 仅存前缀，User-Agent 仅存摘要    |
-| `lastAuthMethod`                    | 最近一次认证方式：`password` 或 `passkey`             |
-| `devicePublicKey`                   | 可选，未来绑定 refresh token/签名                     |
-| `firstSeenAt/lastSeenAt/revokedAt`  | 生命周期                                              |
-
-唯一约束建议为 `(userId, installationIdHash)`。
-
-### Session
-
-| 字段                             | 说明                                |
-| -------------------------------- | ----------------------------------- |
-| `id`                             | 主键                                |
-| `userId/deviceId`                | 所有者                              |
-| `refreshTokenHash`               | 只存哈希，refresh token 单次轮换    |
-| `familyId/rotationCounter`       | 重用检测与 token family 撤销        |
-| `expiresAt/lastUsedAt/revokedAt` | 生命周期                            |
-| `ipPrefix/userAgentSummary`      | 限量审计元数据，不存完整敏感 header |
-| `authMethod`                     | 创建 session 的认证方式             |
-
-### Passkey
-
-| 字段                                      | 说明                                                                    |
-| ----------------------------------------- | ----------------------------------------------------------------------- |
-| `id/userId/credentialId`                  | 内部主键、所有者与 WebAuthn credential id                               |
-| `publicKey/counter/transports`            | 验证 assertion 所需数据；不保存私钥                                     |
-| `deviceType/backedUp/name`                | 设备类型、同步状态与用户可编辑显示名                                    |
-| `createdAt/lastUsedAt`                    | 生命周期                                                                |
-| `WebAuthnChallenge.purpose/challengeHash` | 五分钟、单次使用的注册或登录 challenge；数据库只保存哈希                |
-| `WebAuthnChallenge.userId/sessionId`      | 注册 challenge 绑定当前用户和 session；登录使用 discoverable credential |
-
-### Invitation
-
-| 字段                   | 说明                                       |
-| ---------------------- | ------------------------------------------ |
-| `id/createdByUserId`   | 主键与创建邀请的管理员                     |
-| `emailNormalized`      | 邀请绑定的邮箱                             |
-| `tokenHash`            | 邀请 token 哈希；原始 token 不持久化       |
-| `createdAt/expiresAt`  | 创建与过期时间                             |
-| `acceptedAt/revokedAt` | 单次消费与撤销状态；同邮箱重发会撤销旧邀请 |
-
-只有 admin 可以创建邀请。邀请关闭公开注册时的注册入口，不改变新用户的 `member` 角色。认证边界见 [security.md](security.md#认证方案)。
-
-### Host
-
-| 字段                            | 说明                                         |
-| ------------------------------- | -------------------------------------------- |
-| `id`                            | Dashboard 稳定主键                           |
-| `ownerUserId`                   | 创建者/所有者                                |
-| `label/appearance`              | 明文可查询的 UI 元数据                       |
-| `capabilityFingerprint`         | 服务端 HMAC 盲索引，用于同账号去重；不可还原 |
-| `version`                       | 乐观并发整数                                 |
-| `createdAt/updatedAt/deletedAt` | 删除使用 tombstone                           |
-
-不要把 `serverId` 当 Dashboard 主键；它是 Paseo daemon 身份的一部分，也属于敏感 capability 上下文。
-
-### HostConnection
-
-| 字段                            | 说明                                  |
-| ------------------------------- | ------------------------------------- |
-| `id`                            | 主键                                  |
-| `hostId`                        | Host FK                               |
-| `kind`                          | `relay`；MVP 只同步可跨设备使用的连接 |
-| `encryptedPayload`              | 完整规范化 connection 的 AEAD 密文    |
-| `encryptedDek`                  | 被 KEK 包装的行级/Host 级 DEK         |
-| `keyVersion`                    | 当前包装 `encryptedDek` 的 key 版本   |
-| `payloadKeyVersion`             | payload AAD 使用的原始 key 版本       |
-| `nonce/authTag`                 | 加密元数据                            |
-| `createdAt/updatedAt/deletedAt` | 生命周期                              |
-
-密文应覆盖 `serverId`、`relayEndpoint`、`useTls`、`daemonPublicKeyB64`。如果必须去重，使用独立 HMAC fingerprint，不拆出可被日志或查询工具无意暴露的 capability 字段。
-
-### HostGrant（审查模型，未启用）
-
-| 字段                        | 说明                                                     |
-| --------------------------- | -------------------------------------------------------- |
-| `id`                        | ULID 主键                                                |
-| `hostId`                    | `hosts.id` FK                                            |
-| `granteeUserId`             | 被授权用户的 `users.id` FK；按用户 id 绑定，不按邮箱绑定 |
-| `role`                      | 预留 `operator`、`viewer`；当前两个角色都不启用          |
-| `grantedByUserId`           | 创建授权的用户；当前只允许 Host owner                    |
-| `createdAt/expiresAt`       | 创建时间和可选到期时间                                   |
-| `revokedAt/revokedByUserId` | 撤销时间和撤销主体                                       |
-
-`hosts.ownerUserId` 是唯一的 owner 来源，不为 owner 建立 grant 行。`HostGrant` 只表达 Dashboard 账户之间的授权关系，不保存 pairing offer、HostConnection、daemon credential 或一次性 token。
-
-实现时为 `(hostId, granteeUserId)` 增加“未撤销记录唯一”约束。撤销后保留历史记录，再次授权创建新行。到期由服务端每次鉴权判断，不依赖定时任务。Host 删除或 owner 账户删除时，所有 active grant 都失效。
-
-当前 daemon 没有 per-client credential、命令 scope 或可靠的客户端撤销能力。Dashboard 不能向 `viewer` 返回 HostConnection，因为拿到现有 capability 的用户仍可直接以 daemon operator 身份连接。`operator` 也要等 daemon 提供可撤销、可范围化 credential 后才能启用。
-
-HostGrant 单表不足以接入当前 Host sync。未来实现还需要按用户生成 sync projection 或 outbox，不能复用只支持 owner 的 `hosts.ownerUserId` 和单一 `hosts.lastSyncRevision` 查询。
-
-### PairingCapability
-
-用于导入过程，不长期保存原始 URL。
-
-| 字段                   | 说明                                     |
-| ---------------------- | ---------------------------------------- | -------- | -------- | -------- |
-| `id/userId/deviceId`   | 导入主体                                 |
-| `offerFingerprint`     | HMAC 去重/审计关联                       |
-| `encryptedOffer`       | 仅在需要两阶段提交时短暂保存；默认不保存 |
-| `status`               | `validated                               | consumed | rejected | expired` |
-| `expiresAt/consumedAt` | 短生命周期                               |
-
-推荐单请求完成验证后的持久化，直接生成 `HostConnection`，避免新增原始 offer 暂存表；模型仅为未来异步审批保留。
-
-### AuditEvent
-
-| 字段                           | 说明                                                 |
-| ------------------------------ | ---------------------------------------------------- |
-| `id/userId/deviceId/sessionId` | 主体                                                 |
-| `type`                         | 如 `host.imported`、`host.deleted`、`device.revoked` |
-| `targetType/targetId`          | Dashboard 内部标识                                   |
-| `metadata`                     | allowlist 后的非秘密 JSON                            |
-| `createdAt`                    | 不可变时间                                           |
-
-禁止记录 offer、public-key capability、token、完整 endpoint、完整 `HostConnection` 或密文解密结果。
-
-### EncryptionKeyVersion
-
-| 字段                  | 说明                                                  |
-| --------------------- | ----------------------------------------------------- |
-| `id/version`          | 主键和单调版本                                        |
-| `provider`            | `file` 或 `aws-kms`                                   |
-| `keyRef`              | 文件路径或 KMS 加密后的 data-key blob；不保存原始 KEK |
-| `status`              | `active`、`decrypt_only` 或 `retired`                 |
-| `createdAt/retiredAt` | 轮换生命周期                                          |
-
-轮换先原子切换 active key，使新写入立即使用新版本，再逐条重包 `encryptedDek`。payload 不重加密，所以 `payloadKeyVersion` 保留原值；重包完成并确认旧版本没有连接或服务端 secret 引用后，旧 key 才进入 retired。进程中断会保留 active/decrypt-only 状态，管理员再次调用轮换接口继续剩余重包。
-
-## 删除语义
-
-- Host 删除创建同步 tombstone，而不是立即丢失所有记录。
-- tombstone 至少保留到所有活跃设备确认的 revision 超过删除 revision，另设最长保留期。
-- 账户删除先撤销 session，再异步清除 capability 密文；法务/安全审计只保留去秘密的事件。
-- 删除 Dashboard 数据不能撤销已经复制到离线设备的 daemon capability。
-
-## API
-
-基础路径：`/api/v1`。所有敏感响应使用 `Cache-Control: no-store`。错误格式统一：
-
-```json
-{
-  "error": {
-    "code": "host_version_conflict",
-    "message": "Host 已在其他设备更新",
-    "requestId": "req_...",
-    "details": { "currentVersion": 4 }
-  }
-}
-```
-
-### 认证
-
-```http
-POST /api/v1/auth/register        # 可带 email-bound inviteToken
-POST /api/v1/invitations             # admin；返回一次性原始 token
-POST /api/v1/auth/login
-POST /api/v1/auth/passkey/login/options
-POST /api/v1/auth/passkey/login/verify
-POST /api/v1/auth/refresh
-POST /api/v1/auth/logout
-POST /api/v1/auth/change-password
-GET  /api/v1/me
-DELETE /api/v1/me
-GET    /api/v1/passkeys
-POST   /api/v1/passkeys/registration/options
-POST   /api/v1/passkeys/registration/verify
-DELETE /api/v1/passkeys/{passkeyId}
-```
-
-```json
-// register request；公开注册关闭时必须带管理员签发的 inviteToken
-{ "email": "user@example.com", "password": "...", "device": { "installationId": "dev_...", "name": "Chrome on Laptop", "platform": "web" }, "inviteToken": "..." }
-
-// login response body; Web 的 refresh credential 使用 HttpOnly Cookie
-{ "user": { "id": "usr_...", "email": "user@example.com", "role": "member" }, "deviceId": "dev_...", "accessToken": "opaque-or-jwt", "expiresIn": 900 }
-```
-
-Web 可选择完全 Cookie session；Harmony 使用 bearer access token 和一次性 refresh token。两种 transport profile 调用同一 endpoint、返回同一业务对象。不得把 refresh token 放 URL。
-
-Web Passkey 登录采用 discoverable credential，不先提交邮箱。注册 options 需要当前密码并绑定当前 session；注册和登录 verify 都消费一次性 ceremony。安全约束见 [security.md](security.md#passkey)。
-
-### 设备和 session
-
-```http
-GET    /api/v1/devices
-DELETE /api/v1/devices/{deviceId}
-GET    /api/v1/sessions
-DELETE /api/v1/sessions/{sessionId}
-```
-
-### Host
-
-```http
-GET    /api/v1/hosts
-POST   /api/v1/hosts/import
-PATCH  /api/v1/hosts/{hostId}
-DELETE /api/v1/hosts/{hostId}
-
-GET  /api/v1/admin/encryption-keys
-POST /api/v1/admin/encryption-keys/rotate
-```
-
-加密 key 接口仅允许 admin。轮换需要当前密码；file provider 还需要一个新的 32 字节 key 文件路径，AWS KMS provider 由服务端生成新的 data key。状态响应不返回 `keyRef`。
-
-```json
-// import request：客户端已完成 Relay/E2EE 验证
-{
-  "label": "Home Server",
-  "connection": {
-    "type": "relay",
-    "serverId": "srv_...",
-    "relayEndpoint": "relay.paseo.sh:443",
-    "useTls": true,
-    "daemonPublicKeyB64": "..."
-  },
-  "clientVerification": { "verifiedAt": "2026-08-11T10:00:00Z", "serverVersion": "0.3.0" },
-  "idempotencyKey": "..."
-}
-
-// response
-{ "host": { "id": "hst_...", "label": "Home Server", "version": 1, "connection": { "type": "relay", "serverId": "srv_...", "relayEndpoint": "relay.paseo.sh:443", "useTls": true, "daemonPublicKeyB64": "..." } }, "syncRevision": 12 }
-```
-
-`clientVerification` 仅是 UX 证据，不是服务端信任边界。Dashboard 仍校验结构，但不连接 daemon。
-
-更新请求包含 `baseVersion`，冲突返回 `409 host_version_conflict`。删除必须幂等。
-
-### 增量同步
-
-```http
-GET /api/v1/host-sync?after=12&limit=100
-```
-
-```json
-{
-  "fromRevision": 12,
-  "toRevision": 15,
-  "changes": [
-    {
-      "revision": 13,
-      "operation": "upsert",
-      "host": { "id": "hst_...", "version": 2, "label": "Build Box", "connection": {} }
-    },
-    {
-      "revision": 15,
-      "operation": "delete",
-      "hostId": "hst_old",
-      "deletedAt": "2026-08-11T10:20:00Z"
-    }
-  ],
-  "hasMore": false
-}
-```
-
-账号内每个 Host mutation 在同一事务中递增 `User.syncRevision` 并写变更。客户端持久化最后应用 revision；重复应用必须幂等。MVP 可先全量 `GET /hosts`，但 API 语义从一开始保留 revision。
-
-### 审计
-
-```http
-GET /api/v1/audit-events?cursor=...&limit=50
-```
-
-只返回去秘密事件，例如设备名称、动作、时间和 Dashboard 内部 Host label/id。
-
-## 明确不提供的 API
-
-- 不提供 `/agents`、`/timeline`、`/terminal`、`/permissions` 或 daemon RPC passthrough。
-- 不提供服务端 Host 在线探测。
-- 不提供 Relay WebSocket endpoint 的代理 URL。
-- 不接收 Paseo binary frame。
-
-## 客户端 bootstrap
-
-1. 登录 Dashboard。
-2. 同步 Host registry。
-3. Dashboard Web 把 Host registry 交给自己的连接管理代码。
-4. 连接管理代码调用 `@getpaseo/client`：relay URL + `e2ee.enabled` + `daemonPublicKeyB64`。
-5. daemon `server_info.features.*` 进入 Paseo 的 capability gate，Dashboard 不解释 daemon 协议。
+- Dashboard 必须先登录；
+- pairing 成功必须写入账号；
+- Host 只来自账号；
+- Dashboard Server 不代理 daemon 数据。

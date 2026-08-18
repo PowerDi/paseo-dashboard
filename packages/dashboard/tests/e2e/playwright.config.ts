@@ -1,6 +1,6 @@
+import { defineConfig, devices } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./src",
@@ -8,16 +8,14 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
+  timeout: 60_000,
+  expect: { timeout: 15_000 },
   workers: 1,
   reporter: "html",
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL: "http://localhost:5183",
+    locale: "zh-CN",
     trace: "on-first-retry",
-    launchOptions: {
-      env: {
-        PLAYWRIGHT_BROWSERS_PATH: "/tmp/playwright-browsers",
-      },
-    },
   },
   projects: [
     {
@@ -26,10 +24,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run dev:web",
-    cwd: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."),
-    url: "http://localhost:5173",
-    reuseExistingServer: !process.env.CI,
+    command: "npm run dev:e2e --workspace=@getpaseo/dashboard-web -- --port 5183",
+    cwd: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../.."),
+    url: "http://localhost:5183",
+    reuseExistingServer: false,
     timeout: 60_000,
   },
 });

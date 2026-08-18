@@ -32,6 +32,7 @@ jobs:
       server: ${{ steps.filter.outputs.server }}
       desktop: ${{ steps.filter.outputs.desktop }}
       app: ${{ steps.filter.outputs.app }}
+      dashboard: ${{ steps.filter.outputs.dashboard }}
       sdk: ${{ steps.filter.outputs.sdk }}
       browser: ${{ steps.filter.outputs.browser }}
       relay: ${{ steps.filter.outputs.relay }}
@@ -290,6 +291,36 @@ jobs:
 
       - name: Run app unit tests
         run: npm run test --workspace=@getpaseo/app
+
+  dashboard-tests:
+    name: dashboard-tests
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.dashboard != 'false') }}
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: node scripts/npm-retry.mjs ci
+
+      - name: Build Dashboard packages
+        run: npm run build:dashboard
+
+      - name: Run Dashboard tests
+        run: npm run test:dashboard
+
+      - name: Install Dashboard browser
+        run: npx playwright install chromium
+
+      - name: Run Dashboard authentication smoke test
+        run: npm run test:browser --workspace=@getpaseo/dashboard-tests-e2e
 
   sdk-tests:
     name: sdk-tests

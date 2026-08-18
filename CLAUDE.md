@@ -13,6 +13,7 @@ This is an npm workspace monorepo:
 - `packages/cli` — Docker-style CLI (`paseo run/ls/logs/wait`)
 - `packages/relay` — E2E encrypted relay for remote access
 - `packages/desktop` — Electron desktop wrapper
+- `packages/dashboard` — Account/multi-Host control plane and independent Expo/Metro Dashboard Web
 - `packages/website` — Marketing site (paseo.sh)
 
 ## Docs
