@@ -7,6 +7,7 @@ const repoRoot = new URL("../", import.meta.url);
 const ciWorkflowPath = new URL(".github/workflows/ci.yml", repoRoot);
 const dockerWorkflowPath = new URL(".github/workflows/docker.yml", repoRoot);
 const nixWorkflowPath = new URL(".github/workflows/nix.yml", repoRoot);
+const nixUpdateHashWorkflowPath = new URL(".github/workflows/nix-update-hash.yml", repoRoot);
 const filtersPath = new URL(".github/ci-paths.yml", repoRoot);
 const serverTsconfigPath = new URL("packages/server/tsconfig.server.json", repoRoot);
 const desktopPackagePath = new URL("packages/desktop/package.json", repoRoot);
@@ -252,11 +253,17 @@ test("browser and desktop tests have exclusive, directory-owned suites", () => {
   ]);
 });
 
-test("non-required Docker and Nix workflows avoid runners with workflow path filters", () => {
-  for (const workflowPath of [dockerWorkflowPath, nixWorkflowPath]) {
+test("non-required Docker is path-filtered and paused Nix workflows are manual-only", () => {
+  const dockerSource = readFileSync(dockerWorkflowPath, "utf8");
+  const dockerTrigger = dockerSource.split("jobs:", 1)[0];
+  assert.match(dockerTrigger, /^\s+paths:\s*$/m);
+  assert.doesNotMatch(dockerSource, /dorny\/paths-filter/);
+
+  for (const workflowPath of [nixWorkflowPath, nixUpdateHashWorkflowPath]) {
     const source = readFileSync(workflowPath, "utf8");
     const trigger = source.split("jobs:", 1)[0];
-    assert.match(trigger, /^\s+paths:\s*$/m);
+    assert.match(trigger, /^\s+workflow_dispatch:\s*$/m);
+    assert.doesNotMatch(trigger, /^\s+(pull_request|push):\s*$/m);
     assert.doesNotMatch(source, /dorny\/paths-filter/);
   }
 });
